@@ -1,59 +1,137 @@
-"""
-telegram_bot/formatters.py
-
-ساخت متن پیام‌های تلگرام دقیقاً بر اساس فرمت خواسته‌شده در پروژه.
-"""
-
-
 def format_dex_discovery(discovery: dict) -> str:
+
     record = discovery["record"]
-    reasons = discovery["reasons"] or ["اطلاعات کافی نیست"]
-    risks = discovery["risks"] or ["ریسک قابل توجهی یافت نشد"]
 
-    reasons_text = "\n".join([f"✅ {r}" for r in reasons])
-    risks_text = "\n".join([f"⚠️ {r}" for r in risks])
+    reasons = discovery.get("reasons") or [
+        "اطلاعات کافی نیست"
+    ]
 
-    return f"""🚨 DEX GEM DISCOVERY
+    risks = discovery.get("risks") or [
+        "ریسک قابل توجهی یافت نشد"
+    ]
 
-Token: {record.token}
-Network: {record.network}
-Liquidity: ${record.liquidity:,.0f}
-Volume: ${record.volume:,.0f}
 
-Security Score: {record.security_score}/100
-DEX Score: {record.dex_score}/100
+    reasons_text = "\n".join(
+        [f"✅ {r}" for r in reasons]
+    )
 
-Reasons:
+    risks_text = "\n".join(
+        [f"⚠️ {r}" for r in risks]
+    )
+
+
+    return f"""
+🚨 کشف DEX
+
+ارز:
+{record.token}
+
+شبکه:
+{record.network}
+
+نقدینگی:
+${record.liquidity:,.0f}
+
+حجم:
+${record.volume:,.0f}
+
+امنیت:
+{record.security_score}/100
+
+امتیاز DEX:
+{record.dex_score}/100
+
+
+دلایل:
 {reasons_text}
 
-Risks:
-{risks_text}
 
-Status: {record.status}"""
+ریسک‌ها:
+{risks_text}
+"""
+
 
 
 def format_crypto_report(report: dict) -> str:
-    reasons_text = "\n".join([f"✅ {r}" for r in report.get("reasons", [])]) or "✅ موردی ثبت نشده"
-    risks_text = "\n".join([f"⚠️ {r}" for r in report.get("risks", [])]) or "⚠️ ریسک قابل توجهی یافت نشد"
 
-    return f"""🧠 CRYPTO INTELLIGENCE REPORT
 
-Token: {report['token']}
-Category: {report.get('narrative', 'نامشخص')}
-Market: {report.get('market', 'نامشخص')}
+    reasons_text = "\n".join(
+        [f"✅ {r}" for r in report.get("reasons", [])]
+    ) or "موردی ثبت نشده"
 
-Total Score: {report['total_score']}/100
 
-Security: {report['security']}/100
-Fundamental: {report['fundamental']}/100
-News: {report['news']}/100
-Technical: {report['technical']}/100
-Community: {report['community']}/100
+    risks_text = "\n".join(
+        [f"⚠️ {r}" for r in report.get("risks", [])]
+    ) or "ریسک قابل توجهی یافت نشد"
 
-Reasons:
+
+
+    return f"""
+🧠 گزارش تحلیل ارز
+
+ارز:
+{report['token']}
+
+بازار:
+{report.get('market','نامشخص')}
+
+امتیاز:
+{report['total_score']}/100
+
+
+دلایل:
 {reasons_text}
 
-Risks:
+
+ریسک‌ها:
 {risks_text}
 
-Status: {report['status']}"""
+
+وضعیت:
+{report['status']}
+"""
+
+
+
+def format_market_signal(signal: dict) -> str:
+
+
+    reasons = "\n".join(
+        [
+            f"✅ {r}"
+            for r in signal.get("reasons", [])
+        ]
+    )
+
+
+    return f"""
+🚨 سیگنال بازار
+
+
+ارز:
+{signal.get('symbol')}
+
+
+نوع:
+{signal.get('type','نامشخص')}
+
+
+قیمت ورود:
+{signal.get('price',0)}
+
+
+تغییر:
+{signal.get('change',0)}%
+
+
+حجم:
+{signal.get('volume',0):,.0f} USDT
+
+
+قدرت:
+{signal.get('score',0)}/100
+
+
+دلایل:
+{reasons}
+"""
