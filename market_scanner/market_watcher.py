@@ -1,4 +1,5 @@
 import requests
+import json
 
 
 BASE_URL = "https://api.toobit.com"
@@ -6,36 +7,54 @@ BASE_URL = "https://api.toobit.com"
 
 def get_market_data():
 
-    url = BASE_URL + "/api/v1/spot/market/tickers"
+    url = BASE_URL + "/api/v1/market/tickers"
 
     try:
 
         response = requests.get(
             url,
-            timeout=10
+            timeout=15
         )
 
-        if response.status_code != 200:
 
-            print(
-                f"[Toobit Market Error] Status: {response.status_code}"
-            )
+        print("========== TOOBIT SPOT ==========")
+        print("Status:", response.status_code)
+
+
+        try:
+
+            data = response.json()
+
+        except Exception:
+
+            print(response.text)
 
             return []
 
 
-        data = response.json()
+
+        print(
+            json.dumps(
+                data,
+                indent=2
+            )[:3000]
+        )
 
 
         if isinstance(data, dict):
 
             if "data" in data:
+
                 data = data["data"]
 
+
             elif "result" in data:
+
                 data = data["result"]
 
+
             elif "list" in data:
+
                 data = data["list"]
 
 
@@ -43,7 +62,7 @@ def get_market_data():
         if not isinstance(data, list):
 
             print(
-                "[Toobit Market Error] پاسخ معتبر نیست"
+                "[Toobit Spot Error] پاسخ لیست نیست"
             )
 
             return []
@@ -53,10 +72,12 @@ def get_market_data():
         markets = []
 
 
+
         for item in data:
 
 
             if not isinstance(item, dict):
+
                 continue
 
 
@@ -67,17 +88,19 @@ def get_market_data():
             )
 
 
-
             if not symbol.endswith("USDT"):
+
                 continue
 
 
 
             try:
 
+
                 markets.append({
 
                     "symbol": symbol,
+
 
                     "change": float(
                         item.get(
@@ -89,6 +112,7 @@ def get_market_data():
                         )
                     ),
 
+
                     "volume": float(
                         item.get(
                             "quoteVolume",
@@ -98,6 +122,7 @@ def get_market_data():
                             )
                         )
                     ),
+
 
                     "price": float(
                         item.get(
@@ -109,6 +134,7 @@ def get_market_data():
                         )
                     ),
 
+
                     "high": float(
                         item.get(
                             "highPrice",
@@ -119,6 +145,7 @@ def get_market_data():
                         )
                     ),
 
+
                     "low": float(
                         item.get(
                             "lowPrice",
@@ -128,6 +155,7 @@ def get_market_data():
                             )
                         )
                     ),
+
 
                     "trades": int(
                         item.get(
@@ -151,8 +179,10 @@ def get_market_data():
 
     except Exception as e:
 
+
         print(
-            f"[Toobit Market Scanner Error] {e}"
+            "[Toobit Market Scanner Error]",
+            e
         )
 
         return []
@@ -211,7 +241,6 @@ def find_unusual_moves():
             ) / (
 
                 coin["high"] - coin["low"]
-
                 + 0.00000001
 
             )
@@ -227,6 +256,14 @@ def find_unusual_moves():
 
 
             coin["score"] = score
+
+
+            coin["reasons"] = [
+
+                "افزایش قیمت",
+                "حجم معاملات بالا"
+
+            ]
 
 
             results.append(coin)
