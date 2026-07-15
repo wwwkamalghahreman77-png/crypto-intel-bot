@@ -2,6 +2,15 @@ import time
 from futures.toobit import get_futures_opportunities, get_klines
 
 
+STATUS_LABELS = {
+    "BREAKOUT_HIGH": "⚡ BREAKOUT - سقف بلندمدت شکسته شد",
+    "BOTTOM_REVERSAL": "🔄 BOTTOM REVERSAL - بازگشت از کف بلندمدت",
+    "TREND_FLIP_LONG": "📈 TREND FLIP - تغییر روند کلی به سمت لانگ",
+    "TREND_FLIP_SHORT": "📉 TREND FLIP - تغییر روند کلی به سمت شورت",
+    None: "🔥 PUMP CONFIRMED",
+}
+
+
 def calculate_rsi(closes, period=14):
     if len(closes) < period + 1:
         return None
@@ -36,16 +45,12 @@ def is_rising(closes, min_ratio=0.5):
 
 
 def get_volume_spike_ratio(symbol):
-    """
-    نسبت حجم فعلی به میانگین حجم اخیر - نزدیک‌ترین چیز به تشخیص
-    'ورود پول ناگهانی' که با API رایگان قابل محاسبه‌ست.
-    این یک شاخص آماری است، نه ردیابی واقعی کیف‌پول‌ها (که نیاز به داده آنچین دارد).
-    """
+    """نسبت حجم فعلی به میانگین حجم اخیر - شاخص آماری ورود نقدینگی (نه ردیابی واقعی کیف‌پول)."""
     candles = get_klines(symbol, interval="4h", limit=20)
     if not candles or len(candles) < 10:
         return None
 
-    volumes = [float(c[5]) for c in candles]  # ایندکس 5 = حجم کندل
+    volumes = [float(c[5]) for c in candles]
     avg_volume = sum(volumes[:-1]) / len(volumes[:-1])
     last_volume = volumes[-1]
 
@@ -55,38 +60,108 @@ def get_volume_spike_ratio(symbol):
     return round(last_volume / avg_volume, 2)
 
 
+def analyze_price_structure(symbol):
+    """
+    بررسی ساختار قیمت روی کندل روزانه (۹۰ روز اخیر):
+    - آیا سقف بلندمدت شکسته شده (BREAKOUT_HIGH)
+    - آیا قیمت نزدیک کف بلندمدت بوده و اکنون در حال بازگشت است (BOTTOM_REVERSAL)
+    - آیا روند کلی (بلندمدت) نزولی بوده ولی اخیراً به صعودی تغییر کرده (TREND_FLIP_LONG)
+    - آیا روند کلی صعودی بوده ولی اخیراً به نزولی تغییر کرده (TREND_FLIP_SHORT)
+    """
+    candles = get_klines(symbol, interval="1d", limit=90)
+    if not candles or len(candles) < 30:
+        return None, {}
+
+    closes = [float(c[4]) for c in candles]
+    highs = [float(c[2]) for c in candles]
+    lows = [float(c[3]) for c in candles]
+
+    current_price = closes[-1]
+    lookback_closes = closes[:-1]
+    lookback_highs = highs[:-1]
+    lookback_lows = lows[:-1]
+
+    prev_high = max(lookback_highs)
+    prev_low = min(lookback_lows)
+
+    third = max(1, len(lookback_closes) // 3)
+    early_avg = sum(lookback_closes[:third]) / third
+    late_avg = sum(lookback_closes[-third:]) / third
+    long_term_trend = "up" if late_avg > early_avg else "down"
+
+    recent_closes = closes[-8:]
+    recent_trend_up = recent_closes[-1] > recent_closes[0]
+
+    info = {
+        "current_price": current_price,
+        "prev_high_90d": prev_high,
+        "prev_low_90d": prev_low,
+        "long_term_trend": long_term_trend,
+    }
+
+    structure_signal = None
+    detail = ""
+
+    if current_price > prev_high:
+        structure_signal = "BREAKOUT_HIGH"
+        detail = f"سقف ۹۰ روزه شکسته شد (سقف قبلی: {round(prev_high, 6)})"
+    else:
+        was_near_low = any(c <= prev_low * 1.05 for c in closes[-10:-1]) if prev_low > 0 else False
+        if was_near_low and recent_trend_up and current_price > closes[-8]:
+            structure_signal = "BOTTOM_REVERSAL"
+            detail = f"قیمت نزدیک کف ۹۰ روزه بود ({round(prev_low, 6)}) و اکنون بازگشت صعودی دارد"
+        elif long_term_trend == "down" and recent_trend_up:
+            structure_signal = "TREND_FLIP_LONG"
+            detail = "روند بلندمدت نزولی بود، اما روند کوتاه‌مدت به صعودی تغییر کرد"
+        elif long_term_trend == "up" and not recent_trend_up:
+            structure_signal = "TREND_FLIP_SHORT"
+            detail = "روند بلندمدت صعودی بود، اما روند کوتاه‌مدت به نزولی تغییر کرد"
+
+    return structure_signal, {**info, "detail": detail}
+
+
 def confirm_multi_timeframe(symbol):
-    """
-    تایید حرکت با ۳ تایم‌فریم مختلف (۱۵ دقیقه، ۱ ساعت، ۴ ساعت).
-    هر چه هم‌راستایی تایم‌فریم‌ها بیشتر باشد، اعتماد به روند بیشتر است.
-    """
     reasons = []
     risks = []
     score_bonus = 0
 
+    timeframes = ["15m", "1h", "4h", "1d", "1w"]
     tf_results = {}
-    for tf in ["15m", "1h", "4h"]:
+
+    for tf in timeframes:
         candles = get_klines(symbol, interval=tf, limit=20)
-        if not candles or len(candles) < 10:
+        if not candles or len(candles) < 8:
             tf_results[tf] = None
             continue
         closes = [float(c[4]) for c in candles]
-        tf_results[tf] = {
-            "rising": is_rising(closes),
-            "closes": closes,
-        }
-        time.sleep(0.1)  # جلوگیری از رد شدن از محدودیت نرخ درخواست
+        tf_results[tf] = {"rising": is_rising(closes), "closes": closes}
+        time.sleep(0.1)
 
     aligned_count = sum(1 for tf in tf_results.values() if tf and tf["rising"])
+    available_count = sum(1 for tf in tf_results.values() if tf is not None)
 
-    if aligned_count == 3:
-        score_bonus += 30
-        reasons.append("روند صعودی در هر ۳ تایم‌فریم (۱۵د/۱ساعت/۴ساعت) هم‌راستاست")
-    elif aligned_count == 2:
-        score_bonus += 15
-        reasons.append("روند صعودی در ۲ از ۳ تایم‌فریم تایید شد")
+    if available_count == 0:
+        risks.append("هیچ داده کندلی برای تایید روند در دسترس نبود")
+        return 0, None, None, None, {}, reasons, risks
+
+    alignment_ratio = aligned_count / available_count
+
+    if alignment_ratio == 1:
+        score_bonus += 35
+        reasons.append("روند صعودی در تمام تایم‌فریم‌ها (کوتاه‌مدت تا هفتگی) هم‌راستاست")
+    elif alignment_ratio >= 0.6:
+        score_bonus += 20
+        reasons.append(f"روند صعودی در اکثر تایم‌فریم‌ها ({aligned_count} از {available_count}) تایید شد")
     else:
-        risks.append("تایم‌فریم‌های مختلف روند یکسانی نشان نمی‌دهند (احتمال نوسان کاذب)")
+        risks.append(f"تایم‌فریم‌ها هم‌راستا نیستند (فقط {aligned_count} از {available_count} صعودی)")
+
+    if tf_results.get("1d") and tf_results.get("1w"):
+        daily_weekly_rising = tf_results["1d"]["rising"] and tf_results["1w"]["rising"]
+        if daily_weekly_rising:
+            score_bonus += 15
+            reasons.append("روند روزانه و هفتگی هم صعودی است (زمینه بزرگ‌تر مثبت)")
+        else:
+            risks.append("روند روزانه/هفتگی صعودی نیست - ممکن است این فقط یک حرکت کوتاه‌مدت باشد")
 
     rsi = None
     if tf_results.get("1h"):
@@ -106,15 +181,15 @@ def confirm_multi_timeframe(symbol):
             score_bonus += 15
             reasons.append(f"حجم معاملات {volume_spike}× بالاتر از میانگین اخیر")
 
-    return score_bonus, rsi, volume_spike, reasons, risks
+    structure_signal, structure_info = analyze_price_structure(symbol)
+    if structure_signal:
+        score_bonus += 25
+        reasons.append(structure_info.get("detail", structure_signal))
+
+    return score_bonus, rsi, volume_spike, structure_signal, structure_info, reasons, risks
 
 
 def scan_futures(min_score=70, max_results=15):
-    """
-    اسکن دو مرحله‌ای:
-    مرحله ۱ (ارزان): فیلتر اولیه بر اساس درصد تغییر و حجم ۲۴ ساعته
-    مرحله ۲ (دقیق‌تر): فقط بهترین‌های مرحله ۱ با ۳ تایم‌فریم + تشخیص حجم غیرعادی تایید می‌شوند
-    """
     signals = get_futures_opportunities()
 
     shortlist = []
@@ -156,18 +231,21 @@ def scan_futures(min_score=70, max_results=15):
         shortlist.append(signal)
 
     shortlist.sort(key=lambda s: s["score"], reverse=True)
-    shortlist = shortlist[:40]  # فقط ۴۰ تای برتر رو با تحلیل عمیق‌تر (کندی‌تر) بررسی می‌کنیم
+    shortlist = shortlist[:40]
 
     print(f"[FuturesScanner] {len(shortlist)} کاندید برای تحلیل چندتایم‌فریمی")
 
     confirmed_results = []
 
     for signal in shortlist:
-        bonus, rsi, vol_spike, mt_reasons, mt_risks = confirm_multi_timeframe(signal["symbol"])
+        bonus, rsi, vol_spike, structure_signal, structure_info, mt_reasons, mt_risks = confirm_multi_timeframe(signal["symbol"])
 
         signal["score"] += bonus
         signal["rsi"] = rsi
         signal["volume_spike_ratio"] = vol_spike
+        signal["structure_signal"] = structure_signal
+        signal["structure_info"] = structure_info
+        signal["status_label"] = STATUS_LABELS.get(structure_signal, STATUS_LABELS[None])
         signal["reasons"].extend(mt_reasons)
         signal["risks"].extend(mt_risks)
 
