@@ -1,4 +1,4 @@
-‌import requests
+import requests
 
 
 BASE_URL = "https://api.toobit.com"
@@ -29,7 +29,6 @@ def get_spot_opportunities():
     signals = []
 
     for coin in data:
-
         symbol = coin.get("s", "")
 
         if "USDT" not in symbol:
