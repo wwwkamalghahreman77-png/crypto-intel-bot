@@ -1,7 +1,6 @@
 import sys
 
-from scheduler.jobs import job_market_scan, job_futures_scan
-
+from scheduler.jobs import job_market_scan, job_futures_scan, job_spot_scan
 
 
 def main():
@@ -13,6 +12,7 @@ def main():
 
         job_market_scan()
         job_futures_scan()
+        job_spot_scan()
 
 
     elif mode == "market":
@@ -23,6 +23,11 @@ def main():
     elif mode == "futures":
 
         job_futures_scan()
+
+
+    elif mode == "spot":
+
+        job_spot_scan()
 
 
     else:
