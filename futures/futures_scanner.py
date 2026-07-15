@@ -14,10 +14,7 @@ STATUS_LABELS = {
 def calculate_rsi(closes, period=14):
     if len(closes) < period + 1:
         return None
-
-    gains = []
-    losses = []
-
+    gains, losses = [], []
     for i in range(1, len(closes)):
         diff = closes[i] - closes[i - 1]
         if diff >= 0:
@@ -26,13 +23,10 @@ def calculate_rsi(closes, period=14):
         else:
             gains.append(0)
             losses.append(abs(diff))
-
     avg_gain = sum(gains[-period:]) / period
     avg_loss = sum(losses[-period:]) / period
-
     if avg_loss == 0:
         return 100
-
     rs = avg_gain / avg_loss
     return round(100 - (100 / (1 + rs)), 1)
 
@@ -45,32 +39,25 @@ def is_rising(closes, min_ratio=0.5):
 
 
 def get_volume_spike_ratio(symbol):
-    """نسبت حجم فعلی به میانگین حجم اخیر - شاخص آماری ورود نقدینگی (نه ردیابی واقعی کیف‌پول)."""
     candles = get_klines(symbol, interval="4h", limit=20)
     if not candles or len(candles) < 10:
         return None
-
     volumes = [float(c[5]) for c in candles]
     avg_volume = sum(volumes[:-1]) / len(volumes[:-1])
     last_volume = volumes[-1]
-
     if avg_volume <= 0:
         return None
-
     return round(last_volume / avg_volume, 2)
 
 
 def analyze_price_structure(symbol):
     """
-    بررسی ساختار قیمت روی کندل روزانه (۹۰ روز اخیر):
-    - آیا سقف بلندمدت شکسته شده (BREAKOUT_HIGH)
-    - آیا قیمت نزدیک کف بلندمدت بوده و اکنون در حال بازگشت است (BOTTOM_REVERSAL)
-    - آیا روند کلی (بلندمدت) نزولی بوده ولی اخیراً به صعودی تغییر کرده (TREND_FLIP_LONG)
-    - آیا روند کلی صعودی بوده ولی اخیراً به نزولی تغییر کرده (TREND_FLIP_SHORT)
+    نیازمند حداقل ۳۰ روز کندل روزانه. اگر نبود، None برمی‌گرداند
+    (یعنی ارز به‌اندازه کافی سابقه ندارد و باید کاملاً رد شود).
     """
     candles = get_klines(symbol, interval="1d", limit=90)
     if not candles or len(candles) < 30:
-        return None, {}
+        return None
 
     closes = [float(c[4]) for c in candles]
     highs = [float(c[2]) for c in candles]
@@ -92,13 +79,6 @@ def analyze_price_structure(symbol):
     recent_closes = closes[-8:]
     recent_trend_up = recent_closes[-1] > recent_closes[0]
 
-    info = {
-        "current_price": current_price,
-        "prev_high_90d": prev_high,
-        "prev_low_90d": prev_low,
-        "long_term_trend": long_term_trend,
-    }
-
     structure_signal = None
     detail = ""
 
@@ -117,10 +97,58 @@ def analyze_price_structure(symbol):
             structure_signal = "TREND_FLIP_SHORT"
             detail = "روند بلندمدت صعودی بود، اما روند کوتاه‌مدت به نزولی تغییر کرد"
 
-    return structure_signal, {**info, "detail": detail}
+    # کف/سقف ۲۰ روز اخیر - برای محاسبه نقاط ورود/خروج (بازه کوتاه‌تر و کاربردی‌تر از ۹۰ روز)
+    swing_low_20d = min(lows[-21:-1]) if len(lows) >= 21 else min(lookback_lows)
+    swing_high_20d = max(highs[-21:-1]) if len(highs) >= 21 else max(lookback_highs)
+
+    return {
+        "current_price": current_price,
+        "prev_high_90d": prev_high,
+        "prev_low_90d": prev_low,
+        "swing_low_20d": swing_low_20d,
+        "swing_high_20d": swing_high_20d,
+        "long_term_trend": long_term_trend,
+        "structure_signal": structure_signal,
+        "detail": detail,
+    }
 
 
-def confirm_multi_timeframe(symbol):
+def calculate_trade_levels(current_price, swing_low, swing_high, direction):
+    """
+    محاسبه نقطه ورود، استاپ‌لاس و ۳ حد سود بر اساس نسبت ریسک‌به‌ریوارد ۱:۱ / ۱:۲ / ۱:۳
+    این اعداد بر پایه فرمول تحلیل تکنیکال هستند، نه پیش‌بینی قطعی قیمت.
+    """
+    if direction == "LONG":
+        stop_loss = round(swing_low * 0.98, 8)
+        risk = current_price - stop_loss
+        if risk <= 0:
+            return None
+        return {
+            "entry": round(current_price, 8),
+            "stop_loss": stop_loss,
+            "tp1": round(current_price + risk * 1, 8),
+            "tp2": round(current_price + risk * 2, 8),
+            "tp3": round(current_price + risk * 3, 8),
+        }
+    else:  # SHORT
+        stop_loss = round(swing_high * 1.02, 8)
+        risk = stop_loss - current_price
+        if risk <= 0:
+            return None
+        return {
+            "entry": round(current_price, 8),
+            "stop_loss": stop_loss,
+            "tp1": round(current_price - risk * 1, 8),
+            "tp2": round(current_price - risk * 2, 8),
+            "tp3": round(current_price - risk * 3, 8),
+        }
+
+
+def confirm_multi_timeframe(symbol, direction="LONG"):
+    """
+    برمی‌گرداند None اگر ارز به‌اندازه کافی سابقه معاملاتی نداشته باشد یا
+    RSI/حجم/ساختار قیمت قابل محاسبه نباشد (یعنی رد کامل - ریسک بالا).
+    """
     reasons = []
     risks = []
     score_bonus = 0
@@ -137,63 +165,76 @@ def confirm_multi_timeframe(symbol):
         tf_results[tf] = {"rising": is_rising(closes), "closes": closes}
         time.sleep(0.1)
 
-    aligned_count = sum(1 for tf in tf_results.values() if tf and tf["rising"])
     available_count = sum(1 for tf in tf_results.values() if tf is not None)
+    if available_count < 3:
+        return None  # داده کافی نیست - رد کامل
 
-    if available_count == 0:
-        risks.append("هیچ داده کندلی برای تایید روند در دسترس نبود")
-        return 0, None, None, None, {}, reasons, risks
-
+    aligned_count = sum(1 for tf in tf_results.values() if tf and tf["rising"])
     alignment_ratio = aligned_count / available_count
 
     if alignment_ratio == 1:
         score_bonus += 35
-        reasons.append("روند صعودی در تمام تایم‌فریم‌ها (کوتاه‌مدت تا هفتگی) هم‌راستاست")
+        reasons.append("روند صعودی در تمام تایم‌فریم‌ها هم‌راستاست")
     elif alignment_ratio >= 0.6:
         score_bonus += 20
-        reasons.append(f"روند صعودی در اکثر تایم‌فریم‌ها ({aligned_count} از {available_count}) تایید شد")
+        reasons.append(f"روند صعودی در اکثر تایم‌فریم‌ها ({aligned_count}/{available_count}) تایید شد")
     else:
-        risks.append(f"تایم‌فریم‌ها هم‌راستا نیستند (فقط {aligned_count} از {available_count} صعودی)")
+        risks.append(f"تایم‌فریم‌ها هم‌راستا نیستند ({aligned_count}/{available_count})")
 
-    if tf_results.get("1d") and tf_results.get("1w"):
-        daily_weekly_rising = tf_results["1d"]["rising"] and tf_results["1w"]["rising"]
-        if daily_weekly_rising:
-            score_bonus += 15
-            reasons.append("روند روزانه و هفتگی هم صعودی است (زمینه بزرگ‌تر مثبت)")
-        else:
-            risks.append("روند روزانه/هفتگی صعودی نیست - ممکن است این فقط یک حرکت کوتاه‌مدت باشد")
-
-    rsi = None
-    if tf_results.get("1h"):
-        rsi = calculate_rsi(tf_results["1h"]["closes"])
-        if rsi is not None:
-            if rsi >= 85:
-                risks.append(f"RSI ساعتی بسیار بالا ({rsi}) - ریسک اشباع خرید")
-            elif rsi >= 50:
-                reasons.append(f"RSI ساعتی در محدوده قدرت روند ({rsi})")
+    rsi = calculate_rsi(tf_results["1h"]["closes"]) if tf_results.get("1h") else None
+    if rsi is None:
+        return None  # ریسک بالا - داده کافی نیست، رد کامل
+    if rsi >= 85:
+        risks.append(f"RSI ساعتی بسیار بالا ({rsi}) - ریسک اشباع خرید")
+    elif rsi >= 50:
+        reasons.append(f"RSI ساعتی در محدوده قدرت روند ({rsi})")
 
     volume_spike = get_volume_spike_ratio(symbol)
-    if volume_spike is not None:
-        if volume_spike >= 5:
-            score_bonus += 30
-            reasons.append(f"حجم معاملات {volume_spike}× بیشتر از میانگین اخیر (احتمال ورود نقدینگی جدید)")
-        elif volume_spike >= 2:
-            score_bonus += 15
-            reasons.append(f"حجم معاملات {volume_spike}× بالاتر از میانگین اخیر")
+    if volume_spike is None:
+        return None  # ریسک بالا - داده کافی نیست، رد کامل
 
-    structure_signal, structure_info = analyze_price_structure(symbol)
-    if structure_signal:
+    smart_money_alert = False
+    if volume_spike >= 5:
+        smart_money_alert = True
+        score_bonus += 30
+        reasons.append(f"🐋 پول هوشمند شناسایی شد - حجم {volume_spike}× بیشتر از میانگین")
+    elif volume_spike >= 2:
+        score_bonus += 15
+        reasons.append(f"حجم معاملات {volume_spike}× بالاتر از میانگین اخیر")
+
+    structure = analyze_price_structure(symbol)
+    if structure is None:
+        return None  # ارز جدید/کم‌سابقه - رد کامل
+
+    if structure["structure_signal"]:
         score_bonus += 25
-        reasons.append(structure_info.get("detail", structure_signal))
+        reasons.append(structure["detail"])
 
-    return score_bonus, rsi, volume_spike, structure_signal, structure_info, reasons, risks
+    trade_levels = calculate_trade_levels(
+        structure["current_price"],
+        structure["swing_low_20d"],
+        structure["swing_high_20d"],
+        direction,
+    )
+    if trade_levels is None:
+        return None
+
+    return {
+        "score_bonus": score_bonus,
+        "rsi": rsi,
+        "volume_spike": volume_spike,
+        "smart_money_alert": smart_money_alert,
+        "structure_signal": structure["structure_signal"],
+        "trade_levels": trade_levels,
+        "reasons": reasons,
+        "risks": risks,
+    }
 
 
 def scan_futures(min_score=70, max_results=15):
     signals = get_futures_opportunities()
 
     shortlist = []
-
     for signal in signals:
         score = 0
         reasons = []
@@ -233,21 +274,24 @@ def scan_futures(min_score=70, max_results=15):
     shortlist.sort(key=lambda s: s["score"], reverse=True)
     shortlist = shortlist[:40]
 
-    print(f"[FuturesScanner] {len(shortlist)} کاندید برای تحلیل چندتایم‌فریمی")
+    print(f"[FuturesScanner] {len(shortlist)} کاندید اولیه")
 
     confirmed_results = []
-
     for signal in shortlist:
-        bonus, rsi, vol_spike, structure_signal, structure_info, mt_reasons, mt_risks = confirm_multi_timeframe(signal["symbol"])
+        result = confirm_multi_timeframe(signal["symbol"], direction=signal.get("type", "LONG"))
 
-        signal["score"] += bonus
-        signal["rsi"] = rsi
-        signal["volume_spike_ratio"] = vol_spike
-        signal["structure_signal"] = structure_signal
-        signal["structure_info"] = structure_info
-        signal["status_label"] = STATUS_LABELS.get(structure_signal, STATUS_LABELS[None])
-        signal["reasons"].extend(mt_reasons)
-        signal["risks"].extend(mt_risks)
+        if result is None:
+            continue  # ارز جدید/بدون داده کافی - کاملاً رد شد
+
+        signal["score"] = min(100, signal["score"] + result["score_bonus"])
+        signal["rsi"] = result["rsi"]
+        signal["volume_spike_ratio"] = result["volume_spike"]
+        signal["smart_money_alert"] = result["smart_money_alert"]
+        signal["structure_signal"] = result["structure_signal"]
+        signal["status_label"] = STATUS_LABELS.get(result["structure_signal"], STATUS_LABELS[None])
+        signal["trade_levels"] = result["trade_levels"]
+        signal["reasons"].extend(result["reasons"])
+        signal["risks"].extend(result["risks"])
 
         if signal["score"] >= min_score:
             confirmed_results.append(signal)
