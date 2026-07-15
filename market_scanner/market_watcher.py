@@ -1,9 +1,12 @@
 import requests
 
 
+BASE_URL = "https://api.toobit.com"
+
+
 def get_market_data():
 
-    url = "https://api.binance.com/api/v3/ticker/24hr"
+    url = BASE_URL + "/api/v1/spot/market/tickers"
 
     try:
 
@@ -13,22 +16,38 @@ def get_market_data():
         )
 
         if response.status_code != 200:
+
             print(
-                f"[Market API Error] Status: {response.status_code}"
+                f"[Toobit Market Error] Status: {response.status_code}"
             )
+
             return []
 
 
         data = response.json()
 
 
+        if isinstance(data, dict):
+
+            if "data" in data:
+                data = data["data"]
+
+            elif "result" in data:
+                data = data["result"]
+
+            elif "list" in data:
+                data = data["list"]
+
+
+
         if not isinstance(data, list):
 
             print(
-                "[Market API Error] پاسخ معتبر نیست"
+                "[Toobit Market Error] پاسخ معتبر نیست"
             )
 
             return []
+
 
 
         markets = []
@@ -41,10 +60,12 @@ def get_market_data():
                 continue
 
 
+
             symbol = item.get(
                 "symbol",
                 ""
             )
+
 
 
             if not symbol.endswith("USDT"):
@@ -52,53 +73,76 @@ def get_market_data():
 
 
 
-            markets.append({
+            try:
 
-                "symbol": symbol,
+                markets.append({
 
-                "change": float(
-                    item.get(
-                        "priceChangePercent",
-                        0
+                    "symbol": symbol,
+
+                    "change": float(
+                        item.get(
+                            "priceChangePercent",
+                            item.get(
+                                "changePercent",
+                                0
+                            )
+                        )
+                    ),
+
+                    "volume": float(
+                        item.get(
+                            "quoteVolume",
+                            item.get(
+                                "volume",
+                                0
+                            )
+                        )
+                    ),
+
+                    "price": float(
+                        item.get(
+                            "lastPrice",
+                            item.get(
+                                "price",
+                                0
+                            )
+                        )
+                    ),
+
+                    "high": float(
+                        item.get(
+                            "highPrice",
+                            item.get(
+                                "high",
+                                0
+                            )
+                        )
+                    ),
+
+                    "low": float(
+                        item.get(
+                            "lowPrice",
+                            item.get(
+                                "low",
+                                0
+                            )
+                        )
+                    ),
+
+                    "trades": int(
+                        item.get(
+                            "count",
+                            0
+                        )
                     )
-                ),
 
-                "volume": float(
-                    item.get(
-                        "quoteVolume",
-                        0
-                    )
-                ),
+                })
 
-                "price": float(
-                    item.get(
-                        "lastPrice",
-                        0
-                    )
-                ),
 
-                "high": float(
-                    item.get(
-                        "highPrice",
-                        0
-                    )
-                ),
+            except Exception:
 
-                "low": float(
-                    item.get(
-                        "lowPrice",
-                        0
-                    )
-                ),
+                continue
 
-                "trades": int(
-                    item.get(
-                        "count",
-                        0
-                    )
-                )
-
-            })
 
 
         return markets
@@ -108,10 +152,11 @@ def get_market_data():
     except Exception as e:
 
         print(
-            f"[Market Scanner Error] {e}"
+            f"[Toobit Market Scanner Error] {e}"
         )
 
         return []
+
 
 
 
@@ -125,53 +170,72 @@ def find_unusual_moves():
     results = []
 
 
+
     for coin in markets:
 
 
         score = 0
 
 
-        # حرکت اولیه قیمت
+
         if coin["change"] >= 2:
+
             score += 20
 
 
-        # حجم بالا
+
         if coin["volume"] >= 10000000:
+
             score += 40
 
+
         elif coin["volume"] >= 1000000:
+
             score += 20
 
 
 
-        # تعداد معاملات بالا
         if coin["trades"] >= 50000:
+
             score += 20
 
 
 
-        # نزدیک سقف روزانه (قدرت حرکت)
-        if coin["high"] > 0:
+        if coin["high"] > coin["low"]:
+
 
             position = (
+
                 coin["price"] - coin["low"]
+
             ) / (
+
                 coin["high"] - coin["low"]
+
                 + 0.00000001
+
             )
 
+
             if position >= 0.8:
+
                 score += 20
 
 
 
         if score >= 50:
 
+
             coin["score"] = score
+
 
             results.append(coin)
 
+
+
+    print(
+        f"[Toobit Market Scanner] {len(results)} فرصت پیدا شد"
+    )
 
 
     return results
