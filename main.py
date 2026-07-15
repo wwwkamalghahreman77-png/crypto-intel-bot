@@ -13,12 +13,15 @@ def main():
 
     if mode == "scan":
         job_dex_scan()
+
     elif mode == "analyze":
         job_intelligence_analysis(DEFAULT_WATCHLIST)
+
     elif mode == "all":
         job_dex_scan()
-job_intelligence_analysis(DEFAULT_WATCHLIST)
-job_market_scan()
+        job_intelligence_analysis(DEFAULT_WATCHLIST)
+        job_market_scan()
+
     else:
         print(f"حالت ناشناخته: {mode}. از scan / analyze / all استفاده کنید.")
         sys.exit(1)
