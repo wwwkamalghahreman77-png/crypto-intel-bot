@@ -8,7 +8,8 @@ from telegram_bot.formatters import (
     format_dex_discovery,
     format_crypto_report,
     format_market_signal,
-    format_futures_signal
+    format_futures_signal,
+    format_spot_signal
 )
 
 from analysis.technical import analyze_technical
@@ -207,6 +208,23 @@ def job_futures_scan():
 
     for signal in signals:
 
+        symbol = signal.get("symbol")
+
+        if already_sent(
+            symbol,
+            signal.get("structure_signal") or signal.get("type","UNKNOWN"),
+            signal.get("score",0),
+            signal.get("score",0)
+        ):
+            continue
+
+        mark_sent(
+            symbol,
+            signal.get("structure_signal") or signal.get("type","UNKNOWN"),
+            signal.get("score",0),
+            signal.get("score",0)
+        )
+
         send_message(
             format_futures_signal(signal)
         )
@@ -214,4 +232,44 @@ def job_futures_scan():
 
     print(
         f"[Job] پایان Futures Scanner - {len(signals)} مورد"
+    )
+
+
+
+def job_spot_scan():
+
+    print("[Job] شروع Spot Scanner")
+
+    from spot.spot_scanner import scan_spot
+
+
+    signals = scan_spot()
+
+
+    for signal in signals:
+
+        symbol = signal.get("symbol")
+
+        if already_sent(
+            symbol,
+            signal.get("structure_signal") or signal.get("type","UNKNOWN"),
+            signal.get("score",0),
+            signal.get("score",0)
+        ):
+            continue
+
+        mark_sent(
+            symbol,
+            signal.get("structure_signal") or signal.get("type","UNKNOWN"),
+            signal.get("score",0),
+            signal.get("score",0)
+        )
+
+        send_message(
+            format_spot_signal(signal)
+        )
+
+
+    print(
+        f"[Job] پایان Spot Scanner - {len(signals)} مورد"
     )
