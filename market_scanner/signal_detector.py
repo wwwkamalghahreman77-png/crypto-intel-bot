@@ -2,60 +2,60 @@ from market_scanner.market_watcher import find_unusual_moves
 
 
 def scan_for_signals():
-    """
-    پیدا کردن فرصت‌های غیرعادی بازار
-    """
 
     coins = find_unusual_moves()
 
     signals = []
+
 
     for coin in coins:
 
         score = 0
         reasons = []
 
+
         change = coin.get("change", 0)
         volume = coin.get("volume", 0)
+        trades = coin.get("trades", 0)
 
-        # حرکت قیمت
-        if change >= 3:
-            score += 20
-            reasons.append("حرکت قیمتی مثبت")
 
-        # حجم غیرعادی
+        # حرکت اولیه اما نه پامپ شده
+        if 2 <= change <= 15:
+            score += 25
+            reasons.append("حرکت اولیه قیمت")
+
+
+        # حذف ارزهایی که قبلا پامپ سنگین کرده‌اند
+        if change > 15:
+            continue
+
+
+        # ورود حجم واقعی
         if volume >= 10000000:
-            score += 40
+            score += 35
             reasons.append("ورود حجم سنگین")
 
-        elif volume >= 1000000:
-            score += 25
-            reasons.append("افزایش حجم معاملات")
-
-        # خریدهای سنگین
-        if coin.get("buys", 0) > coin.get("sells", 0):
+        elif volume >= 3000000:
             score += 20
-            reasons.append("قدرت خریدار بیشتر است")
+            reasons.append("افزایش حجم")
 
-        # نقدینگی
-        if coin.get("liquidity", 0) >= 500000:
+
+        # تعداد معاملات
+        if trades >= 50000:
             score += 20
-            reasons.append("نقدینگی مناسب")
+            reasons.append("فعالیت بالای معامله‌گران")
 
 
-        if score >= 50:
+        # فقط سیگنال قوی
+        if score >= 70:
 
             signals.append({
 
                 "symbol": coin["symbol"],
 
-                "type": (
-                    "LONG"
-                    if change >= 0
-                    else "SHORT"
-                ),
+                "type": "LONG",
 
-                "price": coin.get("price", 0),
+                "price": coin.get("price",0),
 
                 "score": score,
 
