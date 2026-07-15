@@ -5,7 +5,7 @@
 
 from dex.gem_scanner import run_full_scan
 from telegram_bot.bot import send_message
-from telegram_bot.formatters import format_dex_discovery, format_crypto_report
+from telegram_bot.formatters import format_dex_discovery, format_crypto_report, format_market_signal
 from analysis.technical import analyze_technical
 from analysis.fundamental import analyze_fundamental
 from analysis.scoring import calculate_total_score, classify_status
