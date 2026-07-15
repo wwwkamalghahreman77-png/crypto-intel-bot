@@ -203,7 +203,9 @@ def job_market_scan():
     print(
         f"[Job] پایان Market Scanner - {len(signals)} مورد"
     )
-    def job_futures_scan():
+
+    
+ def job_futures_scan():
 
     print("[Job] شروع Futures Scanner ...")
 
