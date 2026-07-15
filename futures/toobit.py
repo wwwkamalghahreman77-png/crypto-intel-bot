@@ -1,5 +1,5 @@
 import requests
-
+import json
 
 BASE_URL = "https://api.toobit.com"
 
@@ -12,60 +12,42 @@ def get_futures_symbols():
 
         response = requests.get(
             url,
-            timeout=10
+            timeout=15
         )
 
+        print("========== TOOBIT ==========")
+        print("Status:", response.status_code)
 
-        data = response.json()
+        try:
+            data = response.json()
+        except Exception:
+            print(response.text)
+            return []
 
-
-        print(
-            "[Toobit Response Type]",
-            type(data)
-        )
-
+        print(json.dumps(data, indent=2)[:5000])
+        print("========== END ==========")
 
         if isinstance(data, dict):
 
-            print(
-                "[Toobit Keys]",
-                data.keys()
-            )
-
-
-            # بعضی API ها لیست را داخل data می‌گذارند
             if "data" in data:
                 data = data["data"]
-
 
             elif "result" in data:
                 data = data["result"]
 
-
+            elif "list" in data:
+                data = data["list"]
 
         if not isinstance(data, list):
-
-            print(
-                "[Toobit Error] پاسخ لیست نیست"
-            )
-
             return []
-
-
 
         return data
 
-
-
     except Exception as e:
 
-        print(
-            f"[Toobit Futures Error] {e}"
-        )
+        print("[TOOBIT ERROR]", e)
 
         return []
-
-
 
 
 
@@ -73,107 +55,47 @@ def get_futures_opportunities():
 
     markets = get_futures_symbols()
 
-
     signals = []
-
-
 
     for coin in markets:
 
-
         if not isinstance(coin, dict):
-
             continue
 
-
-
-        symbol = coin.get(
-            "symbol",
-            ""
-        )
-
-
+        symbol = coin.get("symbol", "")
 
         if not symbol.endswith("USDT"):
-
             continue
-
-
 
         try:
 
             change = float(
                 coin.get(
                     "priceChangePercent",
-                    coin.get(
-                        "changePercent",
-                        0
-                    )
+                    coin.get("changePercent", 0)
                 )
             )
-
 
             volume = float(
                 coin.get(
                     "quoteVolume",
-                    coin.get(
-                        "volume",
-                        0
-                    )
+                    coin.get("volume", 0)
                 )
             )
 
-
-        except:
-
+        except Exception:
             continue
-
-
 
         if abs(change) < 1:
-
             continue
-
-
-
-        if volume < 100000:
-
-            continue
-
-
-
-        position = (
-            "LONG"
-            if change > 0
-            else "SHORT"
-        )
-
-
 
         signals.append({
 
             "symbol": symbol,
-
-            "type": position,
-
+            "type": "LONG" if change > 0 else "SHORT",
             "change": change,
-
             "volume": volume,
-
             "score": 60,
-
             "reasons": [
-                "حرکت غیرعادی قیمت",
-                "حجم معاملات مناسب"
+                "تست اتصال Toobit"
             ]
-
-        })
-
-
-
-    print(
-        f"[Toobit Futures] {len(signals)} سیگنال پیدا شد"
-    )
-
-
-    return signals
