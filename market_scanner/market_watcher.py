@@ -16,13 +16,10 @@ def get_market_data():
             timeout=15
         )
 
-
         print("========== TOOBIT SPOT ==========")
         print("Status:", response.status_code)
 
-
         try:
-
             data = response.json()
 
         except Exception:
@@ -32,45 +29,34 @@ def get_market_data():
             return []
 
 
-
         print(
             json.dumps(
                 data,
                 indent=2
-            )[:3000]
+            )[:2000]
         )
 
 
         if isinstance(data, dict):
 
             if "data" in data:
-
                 data = data["data"]
 
-
             elif "result" in data:
-
                 data = data["result"]
 
-
             elif "list" in data:
-
                 data = data["list"]
-
 
 
         if not isinstance(data, list):
 
-            print(
-                "[Toobit Spot Error] پاسخ لیست نیست"
-            )
+            print("[Toobit Error] Data is not list")
 
             return []
 
 
-
         markets = []
-
 
 
         for item in data:
@@ -79,7 +65,6 @@ def get_market_data():
             if not isinstance(item, dict):
 
                 continue
-
 
 
             symbol = item.get(
@@ -93,14 +78,11 @@ def get_market_data():
                 continue
 
 
-
             try:
-
 
                 markets.append({
 
                     "symbol": symbol,
-
 
                     "change": float(
                         item.get(
@@ -112,7 +94,6 @@ def get_market_data():
                         )
                     ),
 
-
                     "volume": float(
                         item.get(
                             "quoteVolume",
@@ -122,7 +103,6 @@ def get_market_data():
                             )
                         )
                     ),
-
 
                     "price": float(
                         item.get(
@@ -134,7 +114,6 @@ def get_market_data():
                         )
                     ),
 
-
                     "high": float(
                         item.get(
                             "highPrice",
@@ -145,7 +124,6 @@ def get_market_data():
                         )
                     ),
 
-
                     "low": float(
                         item.get(
                             "lowPrice",
@@ -155,7 +133,6 @@ def get_market_data():
                             )
                         )
                     ),
-
 
                     "trades": int(
                         item.get(
@@ -172,6 +149,10 @@ def get_market_data():
                 continue
 
 
+        print(
+            f"[Toobit Markets Count] {len(markets)}"
+        )
+
 
         return markets
 
@@ -179,9 +160,8 @@ def get_market_data():
 
     except Exception as e:
 
-
         print(
-            "[Toobit Market Scanner Error]",
+            "[Toobit Market Error]",
             e
         )
 
@@ -193,12 +173,10 @@ def get_market_data():
 
 def find_unusual_moves():
 
-
     markets = get_market_data()
 
 
     results = []
-
 
 
     for coin in markets:
@@ -207,32 +185,22 @@ def find_unusual_moves():
         score = 0
 
 
-
-        if coin["change"] >= 2:
-
-            score += 20
-
-
-
-        if coin["volume"] >= 10000000:
-
-            score += 40
-
-
-        elif coin["volume"] >= 1000000:
+        if coin["change"] >= 1:
 
             score += 20
 
 
+        if coin["volume"] >= 100000:
 
-        if coin["trades"] >= 50000:
+            score += 30
+
+
+        if coin["trades"] >= 1000:
 
             score += 20
-
 
 
         if coin["high"] > coin["low"]:
-
 
             position = (
 
@@ -246,13 +214,13 @@ def find_unusual_moves():
             )
 
 
-            if position >= 0.8:
+            if position >= 0.7:
 
                 score += 20
 
 
 
-        if score >= 50:
+        if score >= 40:
 
 
             coin["score"] = score
@@ -260,8 +228,8 @@ def find_unusual_moves():
 
             coin["reasons"] = [
 
-                "افزایش قیمت",
-                "حجم معاملات بالا"
+                "حرکت قیمت",
+                "حجم مناسب"
 
             ]
 
@@ -271,7 +239,7 @@ def find_unusual_moves():
 
 
     print(
-        f"[Toobit Market Scanner] {len(results)} فرصت پیدا شد"
+        f"[Toobit Signals] {len(results)}"
     )
 
 
