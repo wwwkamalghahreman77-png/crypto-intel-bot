@@ -47,7 +47,7 @@ def analyze_project(coin_id: str, token_symbol: str, market: str = "N/A"):
     if fundamental.get("available"):
         if fundamental.get("twitter_followers", 0) > 50000:
             community_score += 50
-        if fundamental.get("telegram_users", 0) > 10000:
+        if (fundamental.get("telegram_users") or 0) > 10000:
             community_score += 50
         community_score = min(100, community_score)
 
