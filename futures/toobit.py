@@ -1,8 +1,12 @@
+import os
 import requests
-import json
 
 
 BASE_URL = "https://api.toobit.com"
+
+
+ACCESS_KEY = os.getenv("TOOBIT_ACCESS_KEY", "")
+SECRET_KEY = os.getenv("TOOBIT_SECRET_KEY", "")
 
 
 
@@ -12,8 +16,15 @@ def get_futures_symbols():
 
         url = BASE_URL + "/api/v1/futures/market/tickers"
 
+
+        headers = {
+            "X-BB-ACCESSKEY": ACCESS_KEY
+        }
+
+
         response = requests.get(
             url,
+            headers=headers,
             timeout=15
         )
 
@@ -24,13 +35,6 @@ def get_futures_symbols():
 
         data = response.json()
 
-
-        print(
-            json.dumps(
-                data,
-                indent=2
-            )[:3000]
-        )
 
 
         if isinstance(data, dict):
@@ -48,7 +52,12 @@ def get_futures_symbols():
 
         if not isinstance(data, list):
 
+            print(
+                "[Toobit Futures] داده معتبر نیست"
+            )
+
             return []
+
 
 
         return data
@@ -58,7 +67,7 @@ def get_futures_symbols():
     except Exception as e:
 
         print(
-            "[TOOBIT FUTURES ERROR]",
+            "[Toobit Futures Error]",
             e
         )
 
@@ -69,6 +78,7 @@ def get_futures_symbols():
 
 
 def get_futures_opportunities():
+
 
     markets = get_futures_symbols()
 
@@ -123,7 +133,7 @@ def get_futures_opportunities():
             )
 
 
-        except Exception:
+        except:
 
             continue
 
