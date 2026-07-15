@@ -13,6 +13,7 @@ from news.news_fetcher import analyze_news_for_token, fetch_all_news
 from database.db import db, now_str
 from database.models import CryptoReport
 from database.signal_history import already_sent, mark_sent
+from telegram_bot.formatters import format_futures_signal
 
 
 def job_dex_scan():
@@ -201,4 +202,23 @@ def job_market_scan():
 
     print(
         f"[Job] پایان Market Scanner - {len(signals)} مورد"
+    )
+    def job_futures_scan():
+
+    print("[Job] شروع Futures Scanner ...")
+
+    from futures.futures_scanner import scan_futures
+
+    signals = scan_futures()
+
+
+    for signal in signals:
+
+        message = format_futures_signal(signal)
+
+        send_message(message)
+
+
+    print(
+        f"[Job] پایان Futures Scanner - {len(signals)} مورد"
     )
