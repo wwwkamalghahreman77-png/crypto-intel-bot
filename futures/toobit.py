@@ -1,12 +1,12 @@
 import os
 import requests
+import json
 
 
 BASE_URL = "https://api.toobit.com"
 
 
 ACCESS_KEY = os.getenv("TOOBIT_ACCESS_KEY", "")
-SECRET_KEY = os.getenv("TOOBIT_SECRET_KEY", "")
 
 
 
@@ -33,19 +33,43 @@ def get_futures_symbols():
         print("Status:", response.status_code)
 
 
-        data = response.json()
+        try:
+
+            data = response.json()
+
+        except Exception:
+
+            print(response.text)
+
+            return []
+
+
+
+        print(
+            "[TOOBIT FUTURES DATA]"
+        )
+
+        print(
+            json.dumps(
+                data,
+                indent=2
+            )[:5000]
+        )
 
 
 
         if isinstance(data, dict):
 
             if "data" in data:
+
                 data = data["data"]
 
             elif "result" in data:
+
                 data = data["result"]
 
             elif "list" in data:
+
                 data = data["list"]
 
 
@@ -53,11 +77,16 @@ def get_futures_symbols():
         if not isinstance(data, list):
 
             print(
-                "[Toobit Futures] داده معتبر نیست"
+                "[TOOBIT FUTURES] لیست دریافت نشد"
             )
 
             return []
 
+
+
+        print(
+            f"[TOOBIT FUTURES COUNT] {len(data)}"
+        )
 
 
         return data
@@ -67,7 +96,7 @@ def get_futures_symbols():
     except Exception as e:
 
         print(
-            "[Toobit Futures Error]",
+            "[TOOBIT FUTURES ERROR]",
             e
         )
 
@@ -111,6 +140,7 @@ def get_futures_opportunities():
 
         try:
 
+
             change = float(
                 coin.get(
                     "priceChangePercent",
@@ -133,13 +163,15 @@ def get_futures_opportunities():
             )
 
 
-        except:
+        except Exception:
 
             continue
 
 
 
-        if abs(change) < 1:
+        # تست اولیه؛ فیلتر سخت نیست
+
+        if abs(change) < 0.5:
 
             continue
 
@@ -161,17 +193,4 @@ def get_futures_opportunities():
             "score": 60,
 
             "reasons": [
-                "حرکت غیرعادی قیمت",
-                "حجم مناسب"
-            ]
-
-        })
-
-
-
-    print(
-        f"[Toobit Futures] {len(signals)} سیگنال"
-    )
-
-
-    return signals
+                "
