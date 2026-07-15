@@ -4,40 +4,42 @@ import requests
 BASE_URL = "https://api.toobit.com"
 
 
+
 def get_futures_symbols():
 
     try:
 
         url = BASE_URL + "/quote/v1/contract/ticker/price"
 
+
         response = requests.get(
             url,
             timeout=15
         )
 
+
         print("========== TOOBIT FUTURES ==========")
         print("Status:", response.status_code)
-
-        print(response.text[:2000])
 
 
         data = response.json()
 
 
-        if isinstance(data, dict):
-
-            if "data" in data:
-                data = data["data"]
-
-            elif "result" in data:
-                data = data["result"]
-
-
         if not isinstance(data, list):
+
+            print("[TOOBIT] DATA NOT LIST")
+
             return []
 
 
+        print(
+            "[TOOBIT COUNT]",
+            len(data)
+        )
+
+
         return data
+
 
 
     except Exception as e:
@@ -51,34 +53,38 @@ def get_futures_symbols():
 
 
 
+
+
 def get_futures_opportunities():
 
+
     markets = get_futures_symbols()
+
 
     signals = []
 
 
-    for coin in markets:
 
-        if not isinstance(coin, dict):
-            continue
+    for coin in markets:
 
 
         symbol = coin.get(
-            "symbol",
+            "s",
             ""
         )
 
 
-        if not symbol.endswith("USDT"):
+        if "USDT" not in symbol:
+
             continue
+
 
 
         try:
 
             price = float(
                 coin.get(
-                    "price",
+                    "p",
                     0
                 )
             )
@@ -87,6 +93,13 @@ def get_futures_opportunities():
         except:
 
             continue
+
+
+
+        if price <= 0:
+
+            continue
+
 
 
         signals.append({
@@ -99,13 +112,18 @@ def get_futures_opportunities():
 
             "volume": 0,
 
-            "score": 50,
+            "score": 60,
 
             "reasons": [
-                "دریافت موفق داده از Toobit"
+
+                "دریافت قیمت از Toobit Futures",
+
+                "بررسی اولیه بازار"
+
             ]
 
         })
+
 
 
     print(
