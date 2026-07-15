@@ -3,9 +3,7 @@
 """
 
 from dex.gem_scanner import run_full_scan
-
 from telegram_bot.bot import send_message
-
 from telegram_bot.formatters import (
     format_dex_discovery,
     format_crypto_report,
@@ -33,116 +31,73 @@ def job_dex_scan():
     discoveries = run_full_scan()
 
     for d in discoveries:
-        send_message(
-            format_dex_discovery(d)
-        )
+        send_message(format_dex_discovery(d))
 
-    print(
-        f"[Job] پایان اسکن - {len(discoveries)} مورد کشف شد."
-    )
+    print(f"[Job] پایان اسکن - {len(discoveries)} مورد")
 
     return discoveries
 
 
 
-def analyze_project(
-    coin_id: str,
-    token_symbol: str,
-    market: str = "N/A"
-):
+def analyze_project(coin_id, token_symbol, market="N/A"):
 
-    print(
-        f"[Job] تحلیل پروژه: {token_symbol} ({coin_id})"
-    )
+    print(f"[Job] تحلیل پروژه: {token_symbol}")
 
     fundamental = analyze_fundamental(coin_id)
-
     technical = analyze_technical(coin_id)
 
-    all_news = fetch_all_news()
+    news_data = fetch_all_news()
 
     news = analyze_news_for_token(
         token_symbol,
         coin_id,
-        all_news
-    )
-
-
-    community_score = 0
-
-
-    if fundamental.get("available"):
-
-        if fundamental.get(
-            "twitter_followers",
-            0
-        ) > 50000:
-
-            community_score += 50
-
-
-        if (
-            fundamental.get(
-                "telegram_users"
-            )
-            or 0
-        ) > 10000:
-
-            community_score += 50
-
-
-        community_score = min(
-            100,
-            community_score
-        )
-
-
-    security_score = (
-        70
-        if fundamental.get("available")
-        else 30
-    )
-
-
-    narrative_score = (
-        100
-        if fundamental.get(
-            "narrative",
-            "Uncategorized"
-        ) != "Uncategorized"
-        else 40
+        news_data
     )
 
 
     scores = {
 
-        "security": security_score,
-        "fundamental": fundamental.get("score", 0),
-        "news": news.get("score", 0),
-        "narrative": narrative_score,
-        "technical": technical.get("score", 0),
-        "community": community_score,
+        "security": 70 if fundamental.get("available") else 30,
+
+        "fundamental": fundamental.get("score",0),
+
+        "news": news.get("score",0),
+
+        "technical": technical.get("score",0),
+
+        "community": 0,
+
         "liquidity": 50,
+
+        "narrative": 50
 
     }
 
 
-    total_score = calculate_total_score(scores)
+    total = calculate_total_score(scores)
 
-    status = classify_status(total_score)
+    status = classify_status(total)
 
 
     report = CryptoReport(
 
         token=token_symbol.upper(),
+
         date_found=now_str(),
-        total_score=total_score,
-        security=security_score,
-        fundamental=fundamental.get("score", 0),
-        news=news.get("score", 0),
-        technical=technical.get("score", 0),
-        community=community_score,
-        status=status,
+
+        total_score=total,
+
+        security=scores["security"],
+
+        fundamental=scores["fundamental"],
+
+        news=scores["news"],
+
+        technical=scores["technical"],
+
+        community=scores["community"],
+
+        status=status
 
     )
 
@@ -153,173 +108,96 @@ def analyze_project(
     )
 
 
-    report_dict = report.to_dict()
+    result = report.to_dict()
 
-    report_dict["market"] = market
+    result["market"] = market
 
-    report_dict["reasons"] = (
-        fundamental.get("reasons", [])
+    result["reasons"] = (
+        fundamental.get("reasons",[])
         +
-        news.get("reasons", [])
+        news.get("reasons",[])
     )
 
-    report_dict["risks"] = (
-        fundamental.get("risks", [])
+    result["risks"] = (
+        fundamental.get("risks",[])
         +
-        news.get("risks", [])
+        news.get("risks",[])
     )
 
+    return result
 
-    return report_dict
-    def job_intelligence_analysis(watchlist_coins: list):
 
-    print("[Job] شروع Crypto Intelligence Analysis ...")
 
+def job_intelligence_analysis(watchlist_coins):
+
+    print("[Job] شروع تحلیل")
 
     reports = []
 
-
     for coin in watchlist_coins:
 
-
         report = analyze_project(
-
             coin["coin_id"],
-
             coin["symbol"],
-
-            coin.get(
-                "market",
-                "N/A"
-            )
-
+            coin.get("market","N/A")
         )
-
 
         send_message(
             format_crypto_report(report)
         )
 
-
         reports.append(report)
-
-
-
-    print(
-        f"[Job] پایان تحلیل - {len(reports)} گزارش تولید شد."
-    )
 
 
     return reports
 
 
 
-
 def job_market_scan():
 
-
-    print("[Job] شروع Market Scanner ...")
-
+    print("[Job] شروع Market Scanner")
 
     from market_scanner.signal_detector import scan_for_signals
-
 
     signals = scan_for_signals()
 
 
-    sent = set()
-
-
-
     for signal in signals:
 
-
-        symbol = signal.get(
-            "symbol"
-        )
-
-
-        signal_type = signal.get(
-            "type",
-            "UNKNOWN"
-        )
-
-
-        price = signal.get(
-            "price",
-            0
-        )
-
-
-        score = signal.get(
-            "score",
-            0
-        )
-
-
-
-        if symbol in sent:
-
-            continue
-
+        symbol = signal.get("symbol")
 
 
         if already_sent(
-
             symbol,
-
-            signal_type,
-
-            price,
-
-            score
-
+            signal.get("type","UNKNOWN"),
+            signal.get("price",0),
+            signal.get("score",0)
         ):
-
             continue
 
 
-
-        sent.add(symbol)
-
-
-
         mark_sent(
-
             symbol,
-
-            signal_type,
-
-            price,
-
-            score
-
+            signal.get("type","UNKNOWN"),
+            signal.get("price",0),
+            signal.get("score",0)
         )
 
 
-
-        message = format_market_signal(signal)
-
-
-        send_message(message)
-
+        send_message(
+            format_market_signal(signal)
+        )
 
 
     print(
-
         f"[Job] پایان Market Scanner - {len(signals)} مورد"
-
     )
-
-
 
 
 
 def job_futures_scan():
 
-
-    print("[Job] شروع Futures Scanner ...")
-
+    print("[Job] شروع Futures Scanner")
 
     from futures.futures_scanner import scan_futures
 
@@ -327,19 +205,13 @@ def job_futures_scan():
     signals = scan_futures()
 
 
-
     for signal in signals:
 
-
-        message = format_futures_signal(signal)
-
-
-        send_message(message)
-
+        send_message(
+            format_futures_signal(signal)
+        )
 
 
     print(
-
         f"[Job] پایان Futures Scanner - {len(signals)} مورد"
-
     )
