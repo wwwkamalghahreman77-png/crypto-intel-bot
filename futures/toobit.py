@@ -1,55 +1,51 @@
-import os
 import requests
 
 
 BASE_URL = "https://api.toobit.com"
-
-ACCESS_KEY = os.getenv("TOOBIT_ACCESS_KEY", "")
 
 
 def get_futures_symbols():
 
     try:
 
-        url = BASE_URL + "/api/v1/futures/market/tickers"
+        url = BASE_URL + "/quote/v1/contract/ticker/price"
 
-        headers = {
-            "X-BB-ACCESSKEY": ACCESS_KEY
-        }
-
-        r = requests.get(
+        response = requests.get(
             url,
-            headers=headers,
             timeout=15
         )
 
-        print("TOOBIT STATUS:", r.status_code)
+        print("========== TOOBIT FUTURES ==========")
+        print("Status:", response.status_code)
 
-        print("TOOBIT TEXT:", r.text[:1000])
+        print(response.text[:2000])
 
-        data = r.json()
+
+        data = response.json()
 
 
         if isinstance(data, dict):
 
-            data = (
-                data.get("data")
-                or data.get("result")
-                or data.get("list")
-                or []
-            )
+            if "data" in data:
+                data = data["data"]
+
+            elif "result" in data:
+                data = data["result"]
 
 
-        if isinstance(data, list):
-            return data
+        if not isinstance(data, list):
+            return []
 
 
-        return []
+        return data
 
 
     except Exception as e:
 
-        print("TOOBIT ERROR:", e)
+        print(
+            "[TOOBIT FUTURES ERROR]",
+            e
+        )
 
         return []
 
@@ -64,7 +60,14 @@ def get_futures_opportunities():
 
     for coin in markets:
 
-        symbol = coin.get("symbol", "")
+        if not isinstance(coin, dict):
+            continue
+
+
+        symbol = coin.get(
+            "symbol",
+            ""
+        )
 
 
         if not symbol.endswith("USDT"):
@@ -73,16 +76,9 @@ def get_futures_opportunities():
 
         try:
 
-            change = float(
+            price = float(
                 coin.get(
-                    "priceChangePercent",
-                    0
-                )
-            )
-
-            volume = float(
-                coin.get(
-                    "quoteVolume",
+                    "price",
                     0
                 )
             )
@@ -93,28 +89,27 @@ def get_futures_opportunities():
             continue
 
 
+        signals.append({
 
-        if abs(change) < 0.5:
-            continue
+            "symbol": symbol,
 
+            "type": "LONG",
 
+            "change": 0,
 
-        signals.append(
-            {
-                "symbol": symbol,
-                "type": "LONG" if change > 0 else "SHORT",
-                "change": change,
-                "volume": volume,
-                "score": 60,
-                "reasons": [
-                    "حرکت قیمت"
-                ]
-            }
-        )
+            "volume": 0,
+
+            "score": 50,
+
+            "reasons": [
+                "دریافت موفق داده از Toobit"
+            ]
+
+        })
 
 
     print(
-        "FUTURES SIGNALS:",
+        "[TOOBIT FUTURES SIGNALS]",
         len(signals)
     )
 
