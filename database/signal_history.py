@@ -1,36 +1,31 @@
+"""
+جلوگیری از ارسال سیگنال تکراری برای یک ارز با وضعیت و امتیاز مشابه
+"""
+
 from database.db import db, now_str
 
 
-def already_sent(symbol, signal_type, entry_price, score):
-
-    rows = db.fetch_all(
-        "signal_history",
-        limit=100
-    )
+def already_sent(symbol: str, signal_type: str, price: float, score: float) -> bool:
+    try:
+        rows = db.fetch_by_token("signal_history", symbol)
+    except Exception:
+        return False
 
     for row in rows:
-
-        if (
-            row["symbol"] == symbol
-            and row["signal_type"] == signal_type
-            and abs((row["entry_price"] or 0) - entry_price) < 1
-            and abs((row["score"] or 0) - score) < 5
-        ):
+        if row.get("signal_type") == signal_type and abs(row.get("score", 0) - score) < 5:
             return True
 
     return False
 
 
-
-def mark_sent(symbol, signal_type, entry_price, score):
-
-    db.insert(
-        "signal_history",
-        {
-            "symbol": symbol,
+def mark_sent(symbol: str, signal_type: str, price: float, score: float):
+    try:
+        db.insert("signal_history", {
+            "token": symbol,
             "signal_type": signal_type,
-            "entry_price": entry_price,
+            "price": price,
             "score": score,
-            "created_at": now_str()
-        }
-    )
+            "date_found": now_str(),
+        })
+    except Exception as e:
+        print("[SignalHistory] خطا در ذخیره:", e)
