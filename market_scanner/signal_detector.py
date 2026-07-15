@@ -1,4 +1,4 @@
-آهfrom market_scanner.market_watcher import find_unusual_moves
+from market_scanner.market_watcher import find_unusual_moves
 
 
 def scan_for_signals():
