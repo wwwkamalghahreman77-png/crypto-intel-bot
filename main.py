@@ -1,5 +1,7 @@
 import sys
-from scheduler.jobs import job_market_scan
+
+from scheduler.jobs import job_market_scan, job_futures_scan
+
 
 
 def main():
@@ -8,18 +10,28 @@ def main():
 
 
     if mode == "all":
+
+        job_market_scan()
+        job_futures_scan()
+
+
+    elif mode == "market":
+
         job_market_scan()
 
-    elif mode == "scan":
-        job_market_scan()
+
+    elif mode == "futures":
+
+        job_futures_scan()
+
 
     else:
-        print(
-            f"حالت ناشناخته: {mode}"
-        )
-        sys.exit(1)
 
+        print(
+            "حالت ناشناخته"
+        )
 
 
 if __name__ == "__main__":
+
     main()
