@@ -10,7 +10,6 @@ def format_dex_discovery(discovery: dict) -> str:
         "ریسک قابل توجهی یافت نشد"
     ]
 
-
     reasons_text = "\n".join(
         [f"✅ {r}" for r in reasons]
     )
@@ -18,7 +17,6 @@ def format_dex_discovery(discovery: dict) -> str:
     risks_text = "\n".join(
         [f"⚠️ {r}" for r in risks]
     )
-
 
     return f"""
 🚨 کشف DEX
@@ -41,10 +39,8 @@ ${record.volume:,.0f}
 امتیاز DEX:
 {record.dex_score}/100
 
-
 دلایل:
 {reasons_text}
-
 
 ریسک‌ها:
 {risks_text}
@@ -54,7 +50,6 @@ ${record.volume:,.0f}
 
 def format_crypto_report(report: dict) -> str:
 
-
     reasons_text = "\n".join(
         [f"✅ {r}" for r in report.get("reasons", [])]
     ) or "موردی ثبت نشده"
@@ -63,7 +58,6 @@ def format_crypto_report(report: dict) -> str:
     risks_text = "\n".join(
         [f"⚠️ {r}" for r in report.get("risks", [])]
     ) or "ریسک قابل توجهی یافت نشد"
-
 
 
     return f"""
@@ -78,14 +72,11 @@ def format_crypto_report(report: dict) -> str:
 امتیاز:
 {report['total_score']}/100
 
-
 دلایل:
 {reasons_text}
 
-
 ریسک‌ها:
 {risks_text}
-
 
 وضعیت:
 {report['status']}
@@ -95,6 +86,41 @@ def format_crypto_report(report: dict) -> str:
 
 def format_market_signal(signal: dict) -> str:
 
+    reasons = "\n".join(
+        [
+            f"✅ {r}"
+            for r in signal.get("reasons", [])
+        ]
+    )
+
+    return f"""
+🚨 سیگنال بازار
+
+ارز:
+{signal.get('symbol')}
+
+نوع:
+{signal.get('type','نامشخص')}
+
+قیمت ورود:
+{signal.get('price',0)}
+
+تغییر:
+{signal.get('change',0)}%
+
+حجم:
+{signal.get('volume',0):,.0f} USDT
+
+قدرت:
+{signal.get('score',0)}/100
+
+دلایل:
+{reasons}
+"""
+
+
+
+def format_futures_signal(signal: dict) -> str:
 
     reasons = "\n".join(
         [
@@ -103,40 +129,6 @@ def format_market_signal(signal: dict) -> str:
         ]
     )
 
-
-    return f"""
-🚨 سیگنال بازار
-
-
-ارز:
-{signal.get('symbol')}
-
-
-نوع:
-{signal.get('type','نامشخص')}
-
-
-قیمت ورود:
-{signal.get('price',0)}
-
-
-تغییر:
-{signal.get('change',0)}%
-
-
-حجم:
-{signal.get('volume',0):,.0f} USDT
-
-
-قدرت:
-{signal.get('score',0)}/100
-
-
-دلایل:
-{reasons}
-"""
-    def format_futures_signal(signal: dict) -> str:
-
     return f"""
 🚨 سیگنال فیوچرز
 
@@ -144,17 +136,17 @@ def format_market_signal(signal: dict) -> str:
 {signal.get('symbol')}
 
 نوع معامله:
-{signal.get('type')}
+{signal.get('type','نامشخص')}
 
 تغییر:
-{signal.get('change')}%
+{signal.get('change',0)}%
 
 حجم:
 {signal.get('volume',0):,.0f} USDT
 
 قدرت سیگنال:
-{signal.get('score')}/100
+{signal.get('score',0)}/100
 
 دلایل:
-{chr(10).join(['✅ '+r for r in signal.get('reasons',[])])}
+{reasons}
 """
