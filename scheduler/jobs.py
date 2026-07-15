@@ -12,11 +12,10 @@ from analysis.scoring import calculate_total_score, classify_status
 from news.news_fetcher import analyze_news_for_token, fetch_all_news
 from database.db import db, now_str
 from database.models import CryptoReport
+from database.signal_history import already_sent, mark_sent
 
 
 def job_dex_scan():
-    """اسکن توکن‌های DEX و ارسال گزارش‌ها."""
-
     print("[Job] شروع DEX Gem Scan ...")
 
     discoveries = run_full_scan()
@@ -44,7 +43,6 @@ def analyze_project(coin_id: str, token_symbol: str, market: str = "N/A"):
         all_news
     )
 
-
     community_score = 0
 
     if fundamental.get("available"):
@@ -69,7 +67,6 @@ def analyze_project(coin_id: str, token_symbol: str, market: str = "N/A"):
 
 
     scores = {
-
         "security": security_score,
         "fundamental": fundamental.get("score", 0),
         "news": news.get("score", 0),
@@ -77,7 +74,6 @@ def analyze_project(coin_id: str, token_symbol: str, market: str = "N/A"):
         "technical": technical.get("score", 0),
         "community": community_score,
         "liquidity": 50,
-
     }
 
 
@@ -86,22 +82,12 @@ def analyze_project(coin_id: str, token_symbol: str, market: str = "N/A"):
     status = classify_status(total_score)
 
 
-    reasons = (
-        fundamental.get("reasons", [])
-        +
-        news.get("reasons", [])
-    )
+    reasons = fundamental.get("reasons", []) + news.get("reasons", [])
 
-
-    risks = (
-        fundamental.get("risks", [])
-        +
-        news.get("risks", [])
-    )
+    risks = fundamental.get("risks", []) + news.get("risks", [])
 
 
     report = CryptoReport(
-
         token=token_symbol.upper(),
         date_found=now_str(),
         total_score=total_score,
@@ -111,7 +97,6 @@ def analyze_project(coin_id: str, token_symbol: str, market: str = "N/A"):
         technical=technical.get("score", 0),
         community=community_score,
         status=status,
-
     )
 
 
@@ -129,9 +114,7 @@ def analyze_project(coin_id: str, token_symbol: str, market: str = "N/A"):
     )
 
     report_dict["market"] = market
-
     report_dict["reasons"] = reasons
-
     report_dict["risks"] = risks
 
 
@@ -145,7 +128,6 @@ def job_intelligence_analysis(watchlist_coins: list):
 
     reports = []
 
-
     for coin in watchlist_coins:
 
         report = analyze_project(
@@ -154,28 +136,20 @@ def job_intelligence_analysis(watchlist_coins: list):
             coin.get("market", "N/A")
         )
 
-
         send_message(
             format_crypto_report(report)
         )
 
-
         reports.append(report)
 
 
-    print(
-        f"[Job] پایان تحلیل - {len(reports)} گزارش تولید شد."
-    )
+    print(f"[Job] پایان تحلیل - {len(reports)} گزارش تولید شد.")
 
     return reports
 
 
 
 def job_market_scan():
-
-    """
-    اسکن فرصت‌های احتمالی بازار قبل از پامپ
-    """
 
     print("[Job] شروع Market Scanner ...")
 
@@ -191,13 +165,21 @@ def job_market_scan():
 
     for signal in signals:
 
+        symbol = signal["symbol"]
 
-        if signal["symbol"] in sent:
+
+        if symbol in sent:
             continue
 
 
-        sent.add(signal["symbol"])
+        if already_sent(symbol):
+            continue
 
+
+        sent.add(symbol)
+
+
+        mark_sent(symbol)
 
 
         message = f"""
@@ -220,7 +202,6 @@ def job_market_scan():
 
 
         send_message(message)
-
 
 
     print(
