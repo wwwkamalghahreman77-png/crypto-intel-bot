@@ -193,9 +193,9 @@ def job_market_scan():
             score
         )
 
+message = format_market_signal(signal)
 
-        message = f"""
-🟢 فرصت احتمالی بازار
+send_message(message) بازار
 
 ارز: {symbol}
 
