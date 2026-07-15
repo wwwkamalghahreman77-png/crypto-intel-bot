@@ -1,4 +1,4 @@
-from market_scanner.market_watcher import find_unusual_moves
+آهfrom market_scanner.market_watcher import find_unusual_moves
 
 
 def scan_for_signals():
@@ -47,7 +47,7 @@ def scan_for_signals():
 
 
         # فقط سیگنال قوی
-        if score >= 70:
+        if score >= 50:
 
             signals.append({
 
