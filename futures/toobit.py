@@ -1,13 +1,10 @@
 import os
 import requests
-import json
 
 
 BASE_URL = "https://api.toobit.com"
 
-
 ACCESS_KEY = os.getenv("TOOBIT_ACCESS_KEY", "")
-
 
 
 def get_futures_symbols():
@@ -16,181 +13,110 @@ def get_futures_symbols():
 
         url = BASE_URL + "/api/v1/futures/market/tickers"
 
-
         headers = {
             "X-BB-ACCESSKEY": ACCESS_KEY
         }
 
-
-        response = requests.get(
+        r = requests.get(
             url,
             headers=headers,
             timeout=15
         )
 
+        print("TOOBIT STATUS:", r.status_code)
 
-        print("========== TOOBIT FUTURES ==========")
-        print("Status:", response.status_code)
+        print("TOOBIT TEXT:", r.text[:1000])
 
-
-        try:
-
-            data = response.json()
-
-        except Exception:
-
-            print(response.text)
-
-            return []
-
-
-
-        print(
-            "[TOOBIT FUTURES DATA]"
-        )
-
-        print(
-            json.dumps(
-                data,
-                indent=2
-            )[:5000]
-        )
-
+        data = r.json()
 
 
         if isinstance(data, dict):
 
-            if "data" in data:
-
-                data = data["data"]
-
-            elif "result" in data:
-
-                data = data["result"]
-
-            elif "list" in data:
-
-                data = data["list"]
-
-
-
-        if not isinstance(data, list):
-
-            print(
-                "[TOOBIT FUTURES] لیست دریافت نشد"
+            data = (
+                data.get("data")
+                or data.get("result")
+                or data.get("list")
+                or []
             )
 
-            return []
+
+        if isinstance(data, list):
+            return data
 
 
-
-        print(
-            f"[TOOBIT FUTURES COUNT] {len(data)}"
-        )
-
-
-        return data
-
+        return []
 
 
     except Exception as e:
 
-        print(
-            "[TOOBIT FUTURES ERROR]",
-            e
-        )
+        print("TOOBIT ERROR:", e)
 
         return []
 
 
 
-
-
 def get_futures_opportunities():
 
-
     markets = get_futures_symbols()
-
 
     signals = []
 
 
-
     for coin in markets:
 
-
-        if not isinstance(coin, dict):
-
-            continue
-
-
-
-        symbol = coin.get(
-            "symbol",
-            ""
-        )
-
+        symbol = coin.get("symbol", "")
 
 
         if not symbol.endswith("USDT"):
-
             continue
-
 
 
         try:
 
-
             change = float(
                 coin.get(
                     "priceChangePercent",
-                    coin.get(
-                        "changePercent",
-                        0
-                    )
+                    0
                 )
             )
-
 
             volume = float(
                 coin.get(
                     "quoteVolume",
-                    coin.get(
-                        "volume",
-                        0
-                    )
+                    0
                 )
             )
 
 
-        except Exception:
+        except:
 
             continue
 
 
-
-        # تست اولیه؛ فیلتر سخت نیست
 
         if abs(change) < 0.5:
-
             continue
 
 
 
-        signals.append({
+        signals.append(
+            {
+                "symbol": symbol,
+                "type": "LONG" if change > 0 else "SHORT",
+                "change": change,
+                "volume": volume,
+                "score": 60,
+                "reasons": [
+                    "حرکت قیمت"
+                ]
+            }
+        )
 
-            "symbol": symbol,
 
-            "type":
-                "LONG"
-                if change > 0
-                else "SHORT",
+    print(
+        "FUTURES SIGNALS:",
+        len(signals)
+    )
 
-            "change": change,
 
-            "volume": volume,
-
-            "score": 60,
-
-            "reasons": [
-                "
+    return signals
