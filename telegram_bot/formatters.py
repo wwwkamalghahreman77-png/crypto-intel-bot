@@ -135,3 +135,26 @@ def format_market_signal(signal: dict) -> str:
 دلایل:
 {reasons}
 """
+    def format_futures_signal(signal: dict) -> str:
+
+    return f"""
+🚨 سیگنال فیوچرز
+
+ارز:
+{signal.get('symbol')}
+
+نوع معامله:
+{signal.get('type')}
+
+تغییر:
+{signal.get('change')}%
+
+حجم:
+{signal.get('volume',0):,.0f} USDT
+
+قدرت سیگنال:
+{signal.get('score')}/100
+
+دلایل:
+{chr(10).join(['✅ '+r for r in signal.get('reasons',[])])}
+"""
