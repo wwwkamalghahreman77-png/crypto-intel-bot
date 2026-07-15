@@ -1,50 +1,36 @@
-import json
-import os
-from datetime import datetime
+from database.db import db, now_str
 
 
-FILE_PATH = "database/signal_history.json"
+def already_sent(symbol, signal_type, entry_price, score):
 
+    rows = db.fetch_all(
+        "signal_history",
+        limit=100
+    )
 
-def load_history():
-    if not os.path.exists(FILE_PATH):
-        return {}
+    for row in rows:
 
-    try:
-        with open(FILE_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
+        if (
+            row["symbol"] == symbol
+            and row["signal_type"] == signal_type
+            and abs((row["entry_price"] or 0) - entry_price) < 1
+            and abs((row["score"] or 0) - score) < 5
+        ):
+            return True
 
-    except Exception:
-        return {}
-
-
-
-def save_history(history):
-
-    with open(FILE_PATH, "w", encoding="utf-8") as f:
-        json.dump(
-            history,
-            f,
-            ensure_ascii=False,
-            indent=2
-        )
+    return False
 
 
 
-def already_sent(symbol):
+def mark_sent(symbol, signal_type, entry_price, score):
 
-    history = load_history()
-
-    return symbol in history
-
-
-
-def mark_sent(symbol):
-
-    history = load_history()
-
-    history[symbol] = {
-        "sent_at": datetime.utcnow().isoformat()
-    }
-
-    save_history(history)
+    db.insert(
+        "signal_history",
+        {
+            "symbol": symbol,
+            "signal_type": signal_type,
+            "entry_price": entry_price,
+            "score": score,
+            "created_at": now_str()
+        }
+    )
