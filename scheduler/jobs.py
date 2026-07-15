@@ -153,51 +153,69 @@ def job_market_scan():
 
     print("[Job] شروع Market Scanner ...")
 
-
     from market_scanner.signal_detector import scan_for_signals
-
 
     signals = scan_for_signals()
 
-
     sent = set()
-
 
     for signal in signals:
 
         symbol = signal["symbol"]
+
+        signal_type = signal.get("type", "UNKNOWN")
+
+        entry_price = signal.get("price", 0)
+
+        score = signal.get("score", 0)
 
 
         if symbol in sent:
             continue
 
 
-        if already_sent(symbol):
+        if already_sent(
+            symbol,
+            signal_type,
+            entry_price,
+            score
+        ):
             continue
 
 
         sent.add(symbol)
 
 
-        mark_sent(symbol)
+        mark_sent(
+            symbol,
+            signal_type,
+            entry_price,
+            score
+        )
 
 
         message = f"""
 🟢 فرصت احتمالی بازار
 
-ارز: {signal['symbol']}
+ارز: {symbol}
+
+نوع:
+{signal_type}
+
+قیمت ورود:
+{entry_price}
 
 تغییر:
-{signal['change']}%
+{signal.get('change',0)}%
 
 حجم:
-{signal['volume']:,.0f} USDT
+{signal.get('volume',0):,.0f} USDT
 
 امتیاز:
-{signal['score']}/100
+{score}/100
 
 دلایل:
-{', '.join(signal['reasons'])}
+{', '.join(signal.get('reasons', []))}
 """
 
 
