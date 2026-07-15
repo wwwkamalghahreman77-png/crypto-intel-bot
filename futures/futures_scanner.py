@@ -33,7 +33,7 @@ def scan_futures():
             reasons.append("افزایش حجم")
 
 
-        if score >= 50:
+        if score >= 20:
 
             signal["score"] = score
 
