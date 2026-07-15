@@ -110,3 +110,38 @@ def job_intelligence_analysis(watchlist_coins: list):
         reports.append(report)
     print(f"[Job] پایان تحلیل - {len(reports)} گزارش تولید شد.")
     return reports
+
+def job_market_scan():
+    """
+    اسکن فرصت‌های احتمالی قبل از پامپ
+    """
+
+    print("[Job] شروع Market Scanner ...")
+
+    from market_scanner.signal_detector import scan_for_signals
+
+    signals = scan_for_signals()
+
+    for signal in signals:
+
+        message = f"""
+🟢 فرصت احتمالی بازار
+
+ارز: {signal['symbol']}
+
+تغییر:
+{signal['change']}%
+
+حجم:
+{signal['volume']:,.0f} USDT
+
+امتیاز:
+{signal['score']}/100
+
+دلایل:
+{', '.join(signal['reasons'])}
+"""
+
+        send_message(message)
+
+    print(f"[Job] پایان Market Scanner - {len(signals)} مورد")
