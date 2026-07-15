@@ -2,31 +2,36 @@ import requests
 
 
 def get_market_data():
-    """
-    دریافت لیست ارزهایی که بیشترین تغییرات بازار را دارند
-    """
-
     url = "https://api.binance.com/api/v3/ticker/24hr"
 
     try:
         response = requests.get(url, timeout=10)
+
+        if response.status_code != 200:
+            print(f"[Market API Error] Status: {response.status_code}")
+            return []
+
         data = response.json()
+
+        if not isinstance(data, list):
+            print("[Market API Error] پاسخ معتبر نیست")
+            return []
 
         markets = []
 
         for item in data:
+            if not isinstance(item, dict):
+                continue
+
             symbol = item.get("symbol", "")
 
             if not symbol.endswith("USDT"):
                 continue
 
-            change = float(item.get("priceChangePercent", 0))
-            volume = float(item.get("quoteVolume", 0))
-
             markets.append({
                 "symbol": symbol,
-                "change": change,
-                "volume": volume
+                "change": float(item.get("priceChangePercent", 0)),
+                "volume": float(item.get("quoteVolume", 0))
             })
 
         return markets
@@ -44,7 +49,6 @@ def find_unusual_moves():
 
     for coin in markets:
 
-        # حرکت غیرعادی اولیه
         if coin["change"] >= 5 and coin["volume"] >= 1000000:
             results.append(coin)
 
