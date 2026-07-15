@@ -161,7 +161,7 @@ def job_market_scan():
 
     for signal in signals:
 
-        symbol = signal["symbol"]
+        symbol = signal.get("symbol")
 
         signal_type = signal.get("type", "UNKNOWN")
 
@@ -193,31 +193,8 @@ def job_market_scan():
             score
         )
 
-message = format_market_signal(signal)
 
-send_message(message) بازار
-
-ارز: {symbol}
-
-نوع:
-{signal_type}
-
-قیمت ورود:
-{entry_price}
-
-تغییر:
-{signal.get('change',0)}%
-
-حجم:
-{signal.get('volume',0):,.0f} USDT
-
-امتیاز:
-{score}/100
-
-دلایل:
-{', '.join(signal.get('reasons', []))}
-"""
-
+        message = format_market_signal(signal)
 
         send_message(message)
 
