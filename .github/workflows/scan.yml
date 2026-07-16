@@ -3,7 +3,7 @@ name: Crypto Bot Scanner
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "*/5 * * * *"
 
 
 jobs:
@@ -44,4 +44,4 @@ jobs:
 
         run: |
 
-          python main.py
+          python main.py all
