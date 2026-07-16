@@ -7,10 +7,6 @@ def scan_for_signals():
 
     signals = []
 
-    sample = sorted(coins, key=lambda c: c.get("volume", 0), reverse=True)[:5]
-    for c in sample:
-        print(f"[DEBUG MARKET] {c['symbol']} change={c['change']} volume={c['volume']}")
-
     for coin in coins:
 
         score = 0
