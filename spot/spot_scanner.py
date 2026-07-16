@@ -153,7 +153,9 @@ def confirm_multi_timeframe(symbol, direction="LONG"):
         time.sleep(0.1)
 
     available_count = sum(1 for tf in tf_results.values() if tf is not None)
+    print(f"[DEBUG {symbol}] available_count={available_count} tf_results={ {k: (v is not None) for k, v in tf_results.items()} }")
     if available_count < 3:
+        print(f"[DEBUG {symbol}] REJECTED: available_count < 3")
         return None
 
     aligned_count = sum(1 for tf in tf_results.values() if tf and tf["rising"])
@@ -169,7 +171,9 @@ def confirm_multi_timeframe(symbol, direction="LONG"):
         risks.append(f"تایم‌فریم‌ها هم‌راستا نیستند ({aligned_count}/{available_count})")
 
     rsi = calculate_rsi(tf_results["1h"]["closes"]) if tf_results.get("1h") else None
+    print(f"[DEBUG {symbol}] rsi={rsi}")
     if rsi is None:
+        print(f"[DEBUG {symbol}] REJECTED: rsi is None")
         return None
     if rsi >= 85:
         risks.append(f"RSI ساعتی بسیار بالا ({rsi}) - ریسک اشباع خرید")
@@ -177,7 +181,9 @@ def confirm_multi_timeframe(symbol, direction="LONG"):
         reasons.append(f"RSI ساعتی در محدوده قدرت روند ({rsi})")
 
     volume_spike = get_volume_spike_ratio(symbol)
+    print(f"[DEBUG {symbol}] volume_spike={volume_spike}")
     if volume_spike is None:
+        print(f"[DEBUG {symbol}] REJECTED: volume_spike is None")
         return None
 
     smart_money_alert = False
@@ -190,7 +196,9 @@ def confirm_multi_timeframe(symbol, direction="LONG"):
         reasons.append(f"حجم معاملات {volume_spike}× بالاتر از میانگین اخیر")
 
     structure = analyze_price_structure(symbol)
+    print(f"[DEBUG {symbol}] structure={'OK' if structure else None}")
     if structure is None:
+        print(f"[DEBUG {symbol}] REJECTED: structure is None")
         return None
 
     if structure["structure_signal"]:
@@ -203,8 +211,12 @@ def confirm_multi_timeframe(symbol, direction="LONG"):
         structure["swing_high_20d"],
         direction,
     )
+    print(f"[DEBUG {symbol}] trade_levels={'OK' if trade_levels else None}")
     if trade_levels is None:
+        print(f"[DEBUG {symbol}] REJECTED: trade_levels is None")
         return None
+
+    print(f"[DEBUG {symbol}] PASSED with score_bonus={score_bonus}")
 
     return {
         "score_bonus": score_bonus,
