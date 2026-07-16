@@ -1,11 +1,12 @@
 from market_scanner.market_watcher import find_unusual_moves
+from spot.spot_scanner import confirm_multi_timeframe, STATUS_LABELS
 
 
-def scan_for_signals(min_score=75):
+def scan_for_signals(min_score=75, max_results=15):
 
     coins = find_unusual_moves()
 
-    signals = []
+    shortlist = []
 
     for coin in coins:
 
@@ -15,7 +16,6 @@ def scan_for_signals(min_score=75):
         change = coin.get("change", 0)
         volume = coin.get("volume", 0)
 
-        # قدرت حرکت قیمت
         if change >= 20:
             score += 40
             reasons.append("جهش بسیار قوی قیمت")
@@ -31,7 +31,6 @@ def scan_for_signals(min_score=75):
         else:
             continue
 
-        # حجم معاملات
         if volume >= 10_000_000:
             score += 40
             reasons.append("حجم فوق‌سنگین")
@@ -47,31 +46,48 @@ def scan_for_signals(min_score=75):
         else:
             continue
 
-        # پاداش ترکیبی: هم قیمت و هم حجم قوی باشند
         if change >= 10 and volume >= 3_000_000:
             score += 20
             reasons.append("هم‌راستایی قیمت و حجم")
 
         score = min(100, score)
 
-        if score >= min_score:
+        coin["score"] = score
+        coin["reasons"] = reasons
+        coin["risks"] = []
+        coin["type"] = "LONG"
 
-            signals.append({
+        shortlist.append(coin)
 
-                "symbol": coin["symbol"],
+    shortlist.sort(key=lambda s: s["score"], reverse=True)
+    shortlist = shortlist[:40]
 
-                "type": "LONG",
+    print(f"[MarketScanner] {len(shortlist)} کاندید اولیه")
 
-                "price": coin.get("price", 0),
+    confirmed_results = []
 
-                "score": score,
+    for signal in shortlist:
 
-                "reasons": reasons,
+        result = confirm_multi_timeframe(signal["symbol"], direction="LONG")
 
-                "change": change,
+        if result is None:
+            continue
 
-                "volume": volume
+        signal["score"] = min(100, signal["score"] + result["score_bonus"])
+        signal["rsi"] = result["rsi"]
+        signal["volume_spike_ratio"] = result["volume_spike"]
+        signal["smart_money_alert"] = result["smart_money_alert"]
+        signal["structure_signal"] = result["structure_signal"]
+        signal["status_label"] = STATUS_LABELS.get(result["structure_signal"], STATUS_LABELS[None])
+        signal["trade_levels"] = result["trade_levels"]
+        signal["reasons"].extend(result["reasons"])
+        signal["risks"] = result["risks"]
 
-            })
+        if signal["score"] >= min_score:
+            confirmed_results.append(signal)
 
-    return signals
+    confirmed_results.sort(key=lambda s: s["score"], reverse=True)
+
+    print(f"[MarketScanner] {len(confirmed_results)} سیگنال نهایی تایید شد")
+
+    return confirmed_results[:max_results]
