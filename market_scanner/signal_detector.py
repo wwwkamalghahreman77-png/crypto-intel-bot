@@ -1,7 +1,7 @@
 from market_scanner.market_watcher import find_unusual_moves
 
 
-def scan_for_signals():
+def scan_for_signals(min_score=75):
 
     coins = find_unusual_moves()
 
@@ -15,22 +15,46 @@ def scan_for_signals():
         change = coin.get("change", 0)
         volume = coin.get("volume", 0)
 
-        if 2 <= change <= 15:
-            score += 25
+        # قدرت حرکت قیمت
+        if change >= 20:
+            score += 40
+            reasons.append("جهش بسیار قوی قیمت")
+        elif change >= 10:
+            score += 30
+            reasons.append("جهش قوی قیمت")
+        elif change >= 5:
+            score += 20
+            reasons.append("حرکت قابل‌توجه قیمت")
+        elif change >= 2:
+            score += 10
             reasons.append("حرکت اولیه قیمت")
-
-        if change > 15:
+        else:
             continue
 
-        if volume >= 1000000:
-            score += 35
-            reasons.append("ورود حجم سنگین")
-
-        elif volume >= 300000:
+        # حجم معاملات
+        if volume >= 10_000_000:
+            score += 40
+            reasons.append("حجم فوق‌سنگین")
+        elif volume >= 3_000_000:
+            score += 30
+            reasons.append("حجم سنگین")
+        elif volume >= 1_000_000:
             score += 20
-            reasons.append("افزایش حجم")
+            reasons.append("حجم بالا")
+        elif volume >= 300_000:
+            score += 10
+            reasons.append("حجم متوسط")
+        else:
+            continue
 
-        if score >= 40:
+        # پاداش ترکیبی: هم قیمت و هم حجم قوی باشند
+        if change >= 10 and volume >= 3_000_000:
+            score += 20
+            reasons.append("هم‌راستایی قیمت و حجم")
+
+        score = min(100, score)
+
+        if score >= min_score:
 
             signals.append({
 
