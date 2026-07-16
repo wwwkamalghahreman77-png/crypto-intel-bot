@@ -78,3 +78,43 @@ def get_klines(symbol, interval="15m", limit=20):
     except Exception as e:
         print("[TOOBIT FUTURES KLINES ERROR]", e)
         return []
+def get_current_price(symbol):
+
+    try:
+
+        url = BASE_URL + "/quote/v1/contract/ticker/price"
+
+        params = {
+            "symbol": symbol
+        }
+
+        response = requests.get(
+            url,
+            params=params,
+            timeout=10
+        )
+
+
+        data = response.json()
+
+
+        if isinstance(data, dict):
+
+            price = data.get("p")
+
+            if price:
+                return float(price)
+
+
+
+        return None
+
+
+    except Exception as e:
+
+        print(
+            "[TOOBIT PRICE ERROR]",
+            e
+        )
+
+        return None
