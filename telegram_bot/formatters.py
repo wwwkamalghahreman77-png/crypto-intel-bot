@@ -200,3 +200,7 @@ def format_futures_signal(signal: dict) -> str:
 
 def format_spot_signal(signal: dict) -> str:
     return _format_scanner_signal(signal, "Spot", is_futures=False)
+
+
+def format_market_signal_v2(signal: dict) -> str:
+    return _format_scanner_signal(signal, "Market", is_futures=False)
