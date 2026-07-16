@@ -16,24 +16,68 @@ API_URL = "https://api.telegram.org/bot{token}/{method}"
 
 
 def send_message(text: str, chat_id: str = None):
-    """ارسال یک پیام متنی ساده به کانال/چت تلگرام (روش سبک، بدون نیاز به کتابخانه اضافه)."""
-    if not settings.telegram_enabled:
-        print("[Telegram] توکن یا chat_id تنظیم نشده - پیام فقط در کنسول چاپ می‌شود:")
-        print(text)
-        return
+    """ارسال پیام تلگرام و برگشت message_id برای Reply خودکار."""
 
-    url = API_URL.format(token=settings.telegram_bot_token, method="sendMessage")
+    if not settings.telegram_enabled:
+        print("[Telegram] تنظیمات کامل نیست:")
+        print(text)
+        return None
+
+
+    url = API_URL.format(
+        token=settings.telegram_bot_token,
+        method="sendMessage"
+    )
+
+
     payload = {
         "chat_id": chat_id or settings.telegram_chat_id,
         "text": text,
         "parse_mode": "HTML",
     }
-    try:
-        resp = requests.post(url, json=payload, timeout=10)
-        resp.raise_for_status()
-    except requests.RequestException as e:
-        print(f"[Telegram] خطا در ارسال پیام: {e}")
 
+
+    try:
+
+        resp = requests.post(
+            url,
+            json=payload,
+            timeout=10
+        )
+
+        resp.raise_for_status()
+
+
+        data = resp.json()
+
+
+        if data.get("ok"):
+
+            message_id = data["result"]["message_id"]
+
+            print(
+                "[Telegram] Message ID:",
+                message_id
+            )
+
+            return message_id
+
+
+        print(
+            "[Telegram] پاسخ نامعتبر:",
+            data
+        )
+
+        return None
+
+
+    except requests.RequestException as e:
+
+        print(
+            f"[Telegram] خطا در ارسال پیام: {e}"
+        )
+
+        return None
 
 # ------------------------------------------------------------------
 # دستورات تعاملی ربات (نیازمند اجرای مداوم ربات - نه در GitHub Actions)
