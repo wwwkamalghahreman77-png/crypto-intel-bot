@@ -1,111 +1,111 @@
+def clean_symbol(symbol: str) -> str:
+    """حذف SWAP از نماد و تبدیل به فرمت BASE/QUOTE"""
+    s = (symbol or "").replace("-SWAP-", "-").strip("-")
+    if "-" in s:
+        s = s.replace("-", "/")
+    elif s.endswith("USDT"):
+        s = s[:-4] + "/USDT"
+    return s
+
+
+def suggest_leverage(score: int, risks: list) -> str:
+    """اهرم پیشنهادی بر اساس قدرت سیگنال و وجود ریسک"""
+    if risks:
+        return "2x"
+    if score >= 90:
+        return "5x"
+    if score >= 80:
+        return "3x"
+    return "2x"
+
+
+def build_badges(signal: dict) -> str:
+    """حداکثر ۴ نشونه‌ی کوتاه بر اساس نوع سیگنال"""
+    badges = []
+
+    status_label = signal.get("status_label", "")
+    if status_label:
+        badges.append(status_label.split(" ")[0])  # فقط ایموجی اول
+
+    if signal.get("smart_money_alert"):
+        badges.append("🐋")
+
+    if signal.get("volume", 0) >= 5_000_000:
+        badges.append("💰")
+
+    if signal.get("score", 0) >= 90:
+        badges.append("⭐")
+
+    return "".join(badges[:4])
+
+
+def build_short_reason(signal: dict) -> str:
+    """یک عبارت کوتاه برای دلیل تایید سیگنال"""
+    parts = []
+
+    if signal.get("change", 0) >= 15:
+        parts.append("جهش شدید قیمت")
+
+    if signal.get("volume", 0) >= 5_000_000:
+        parts.append("حجم بسیار بالا")
+    elif signal.get("volume", 0) >= 1_000_000:
+        parts.append("حجم بالا")
+
+    if signal.get("smart_money_alert"):
+        parts.append("پول هوشمند")
+
+    structure_signal = signal.get("structure_signal")
+    if structure_signal == "BREAKOUT_HIGH":
+        parts.append("شکست سقف")
+    elif structure_signal == "BOTTOM_REVERSAL":
+        parts.append("بازگشت از کف")
+    elif structure_signal in ("TREND_FLIP_LONG", "TREND_FLIP_SHORT"):
+        parts.append("تغییر روند")
+
+    return " + ".join(parts[:2]) if parts else "سیگنال ترکیبی"
+
+
 def format_dex_discovery(discovery: dict) -> str:
 
     record = discovery["record"]
+    symbol = clean_symbol(record.token)
 
-    reasons = discovery.get("reasons") or ["اطلاعات کافی نیست"]
-    risks = discovery.get("risks") or ["ریسک قابل توجهی یافت نشد"]
-
-    reasons_text = "\n".join([f"✅ {r}" for r in reasons])
-    risks_text = "\n".join([f"⚠️ {r}" for r in risks])
-
-    return f"""
-🚨 کشف DEX
-
-ارز:
-{record.token}
-
-شبکه:
-{record.network}
-
-نقدینگی:
-${record.liquidity:,.0f}
-
-حجم:
-${record.volume:,.0f}
-
-امنیت:
-{record.security_score}/100
-
-امتیاز DEX:
-{record.dex_score}/100
-
-دلایل:
-{reasons_text}
-
-ریسک‌ها:
-{risks_text}
-"""
+    return (
+        f"🚨 کشف DEX | {symbol}\n"
+        f"شبکه: {record.network}\n"
+        f"نقدینگی: ${record.liquidity:,.0f} | حجم: ${record.volume:,.0f}\n"
+        f"امنیت: {record.security_score}/100 | امتیاز: {record.dex_score}/100"
+    )
 
 
 def format_crypto_report(report: dict) -> str:
 
-    reasons_text = "\n".join([f"✅ {r}" for r in report.get("reasons", [])]) or "موردی ثبت نشده"
-    risks_text = "\n".join([f"⚠️ {r}" for r in report.get("risks", [])]) or "ریسک قابل توجهی یافت نشد"
+    symbol = clean_symbol(report.get("token", ""))
 
-    return f"""
-🧠 گزارش تحلیل ارز
-
-ارز:
-{report['token']}
-
-بازار:
-{report.get('market','نامشخص')}
-
-امتیاز:
-{report['total_score']}/100
-
-دلایل:
-{reasons_text}
-
-ریسک‌ها:
-{risks_text}
-
-وضعیت:
-{report['status']}
-"""
+    return (
+        f"🧠 گزارش تحلیل | {symbol}\n"
+        f"بازار: {report.get('market','نامشخص')}\n"
+        f"امتیاز: {report['total_score']}/100 | وضعیت: {report['status']}"
+    )
 
 
 def format_market_signal(signal: dict) -> str:
 
-    reasons = "\n".join([f"✅ {r}" for r in signal.get("reasons", [])])
+    symbol = clean_symbol(signal.get("symbol", ""))
+    reason = build_short_reason(signal)
 
-    return f"""
-🚨 سیگنال بازار
-
-ارز:
-{signal.get('symbol')}
-
-نوع:
-{signal.get('type','نامشخص')}
-
-قیمت ورود:
-{signal.get('price',0)}
-
-تغییر:
-{signal.get('change',0)}%
-
-حجم:
-{signal.get('volume',0):,.0f} USDT
-
-قدرت:
-{signal.get('score',0)}/100
-
-دلایل:
-{reasons}
-"""
+    return (
+        f"🚨 {symbol} | {signal.get('type','?')}\n"
+        f"قیمت: {signal.get('price',0)} | حجم: {signal.get('volume',0):,.0f}\n"
+        f"{reason} | امتیاز: {signal.get('score',0)}/100"
+    )
 
 
-def _format_scanner_signal(signal: dict, title: str) -> str:
-    """فرمت کوتاه سیگنال Futures/Spot همراه با نقاط ورود/خروج/استاپ‌لاس"""
+def _format_scanner_signal(signal: dict, title: str, is_futures: bool = False) -> str:
 
-    status_label = signal.get("status_label", "🔥 PUMP")
-    smart_money = "🐋 پول هوشمند شناسایی شد\n" if signal.get("smart_money_alert") else ""
-
-    rsi = signal.get("rsi")
-    rsi_text = f"{rsi}" if rsi is not None else "—"
-
-    volume_spike = signal.get("volume_spike_ratio")
-    volume_spike_text = f"{volume_spike}×" if volume_spike is not None else "—"
+    symbol = clean_symbol(signal.get("symbol", ""))
+    badges = build_badges(signal)
+    reason = build_short_reason(signal)
 
     levels = signal.get("trade_levels") or {}
     entry = levels.get("entry", "—")
@@ -114,31 +114,25 @@ def _format_scanner_signal(signal: dict, title: str) -> str:
     tp2 = levels.get("tp2", "—")
     tp3 = levels.get("tp3", "—")
 
-    top_reasons = signal.get("reasons", [])[:3]
-    reasons_text = " | ".join(top_reasons) if top_reasons else "—"
+    leverage_line = ""
+    if is_futures:
+        leverage = suggest_leverage(signal.get("score", 0), signal.get("risks", []))
+        leverage_line = f"اهرم پیشنهادی: {leverage}\n"
 
     return (
-        f"{status_label}\n"
-        f"{smart_money}"
-        f"{title} | {signal.get('symbol')} | {signal.get('type','?')}\n"
-        f"تغییر: {signal.get('change',0)}% | حجم: {signal.get('volume',0):,.0f} | "
-        f"RSI: {rsi_text} | نسبت حجم: {volume_spike_text}\n"
-        f"─────────\n"
-        f"ورود: {entry}\n"
-        f"استاپ‌لاس: {stop_loss}\n"
-        f"حد سود ۱: {tp1}\n"
-        f"حد سود ۲: {tp2}\n"
-        f"حد سود ۳: {tp3}\n"
-        f"─────────\n"
+        f"{badges} {title} | {symbol} | {signal.get('type','?')}\n"
+        f"{reason}\n"
+        f"ورود: {entry} | استاپ: {stop_loss}\n"
+        f"TP: {tp1} / {tp2} / {tp3}\n"
+        f"{leverage_line}"
         f"امتیاز: {min(signal.get('score',0), 100)}/100\n"
-        f"{reasons_text}\n"
-        f"⚠️ تحلیلی است، نه تضمین سود. مدیریت سرمایه با خودتان است."
+        f"⚠️ تحلیلی است، نه تضمین سود."
     )
 
 
 def format_futures_signal(signal: dict) -> str:
-    return _format_scanner_signal(signal, "Futures")
+    return _format_scanner_signal(signal, "Futures", is_futures=True)
 
 
 def format_spot_signal(signal: dict) -> str:
-    return _format_scanner_signal(signal, "Spot")
+    return _format_scanner_signal(signal, "Spot", is_futures=False)
