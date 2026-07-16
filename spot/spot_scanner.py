@@ -241,13 +241,13 @@ def scan_spot(min_score=70, max_results=15):
         else:
             continue
 
-        if volume >= 50_000_000:
+        if volume >= 5_000_000:
             score += 25
             reasons.append("حجم معاملات ۲۴ ساعته بسیار بالا")
-        elif volume >= 10_000_000:
+        elif volume >= 1_000_000:
             score += 15
             reasons.append("حجم معاملات ۲۴ ساعته بالا")
-        elif volume >= 1_000_000:
+        elif volume >= 200_000:
             score += 5
             reasons.append("حجم معاملات ۲۴ ساعته متوسط")
         else:
