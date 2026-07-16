@@ -27,7 +27,6 @@ CREATE_TABLES_SQL = {
         )
     """,
 
-
     "crypto_reports": """
         CREATE TABLE IF NOT EXISTS crypto_reports (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,7 +42,6 @@ CREATE_TABLES_SQL = {
         )
     """,
 
-
     "signal_history": """
         CREATE TABLE IF NOT EXISTS signal_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,7 +53,6 @@ CREATE_TABLES_SQL = {
         )
     """,
 
-
     "performance_tracking": """
         CREATE TABLE IF NOT EXISTS performance_tracking (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -66,7 +63,6 @@ CREATE_TABLES_SQL = {
             result TEXT
         )
     """,
-
 
     "active_signals": """
         CREATE TABLE IF NOT EXISTS active_signals (
@@ -319,6 +315,69 @@ class Database:
                 dict(row)
                 for row in rows
             ]
+
+
+    def fetch_active(
+        self,
+        table: str,
+        status: str = "active",
+        limit: int = 500
+    ):
+
+        if self.use_supabase:
+
+            res = (
+                self.client
+                .table(table)
+                .select("*")
+                .eq("status", status)
+                .execute()
+            )
+
+            return res.data
+
+        cur = self.conn.cursor()
+
+        cur.execute(
+            f"SELECT * FROM {table} WHERE status = ? ORDER BY id DESC LIMIT ?",
+            (status, limit)
+        )
+
+        return [dict(row) for row in cur.fetchall()]
+
+
+    def update(
+        self,
+        table: str,
+        row_id,
+        data: dict
+    ):
+
+        data = dict(data)
+
+        if self.use_supabase:
+
+            return (
+                self.client
+                .table(table)
+                .update(data)
+                .eq("id", row_id)
+                .execute()
+            )
+
+        set_clause = ", ".join([f"{k} = ?" for k in data.keys()])
+        values = list(data.values()) + [row_id]
+
+        cur = self.conn.cursor()
+
+        cur.execute(
+            f"UPDATE {table} SET {set_clause} WHERE id = ?",
+            values
+        )
+
+        self.conn.commit()
+
+        return cur.rowcount
 
 
 
