@@ -59,7 +59,7 @@ def get_futures_opportunities():
 
 def get_klines(symbol, interval="15m", limit=20):
     try:
-        url = BASE_URL + "/quote/v1/klines"
+        url = BASE_URL + "/quote/v1/contract/klines"
         params = {
             "symbol": symbol,
             "interval": interval,
@@ -67,13 +67,23 @@ def get_klines(symbol, interval="15m", limit=20):
         }
 
         response = requests.get(url, params=params, timeout=15)
+        payload = response.json()
 
-        data = response.json()
-
-        if not isinstance(data, list):
+        raw = payload.get("data", []) if isinstance(payload, dict) else payload
+        if not isinstance(raw, list):
             return []
 
-        return data
+        candles = []
+        for item in raw:
+            candles.append([
+                item.get("time"),
+                item.get("open"),
+                item.get("high"),
+                item.get("low"),
+                item.get("close"),
+                item.get("volume"),
+            ])
+        return candles
 
     except Exception as e:
         print("[TOOBIT FUTURES KLINES ERROR]", e)
