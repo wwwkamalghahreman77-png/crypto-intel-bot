@@ -35,7 +35,7 @@ def get_futures_opportunities():
             continue
 
         try:
-            change_percent = float(coin.get("pcp", 0))
+            change_percent = float(coin.get("pcp", 0)) * 100
             quote_volume = float(coin.get("qv", 0))
         except:
             continue
