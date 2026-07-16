@@ -22,6 +22,9 @@ def get_spot_opportunities():
 
         print("[TOOBIT SPOT COUNT]", len(data))
 
+        if data:
+            print("[SPOT SAMPLE]", data[0].get("s"), "pcp=", data[0].get("pcp"), "qv=", data[0].get("qv"))
+
     except Exception as e:
         print("[TOOBIT SPOT ERROR]", e)
         return []
