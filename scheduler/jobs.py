@@ -18,11 +18,14 @@ from analysis.scoring import calculate_total_score, classify_status
 
 from news.news_fetcher import analyze_news_for_token, fetch_all_news
 
+from config.settings import settings
 from database.db import db, now_str
 from database.models import CryptoReport
 
 from database.signal_history import already_sent, mark_sent
 
+
+MIN_SIGNAL_SCORE = 80
 
 
 def save_active_signal(signal, message_id=None):
@@ -42,7 +45,7 @@ def save_active_signal(signal, message_id=None):
 
         "stop_loss": levels.get("stop_loss", 0),
 
-        "telegram_chat_id": None,
+        "telegram_chat_id": settings.telegram_chat_id,
         "telegram_message_id": message_id,
 
         "status": "active",
@@ -251,6 +254,10 @@ def job_market_scan():
         )
 
 
+        if signal.get("score", 0) < MIN_SIGNAL_SCORE:
+            continue
+
+
         if active_signal_exists(symbol):
 
             continue
@@ -311,6 +318,10 @@ def job_futures_scan():
         symbol = signal.get(
             "symbol"
         )
+
+
+        if signal.get("score", 0) < MIN_SIGNAL_SCORE:
+            continue
 
 
         if active_signal_exists(symbol):
@@ -389,6 +400,10 @@ def job_spot_scan():
         )
 
 
+        if signal.get("score", 0) < MIN_SIGNAL_SCORE:
+            continue
+
+
         if active_signal_exists(symbol):
 
             continue
@@ -438,3 +453,118 @@ def job_spot_scan():
     print(
         f"[Job] پایان Spot Scanner - {len(signals)} مورد"
     )
+
+
+
+def _calc_profit_pct(signal_type, entry, hit_price):
+
+    if not entry:
+        return 0
+
+    if signal_type == "LONG":
+        return round((hit_price - entry) / entry * 100, 2)
+
+    return round((entry - hit_price) / entry * 100, 2)
+
+
+
+def job_monitor_active_signals():
+
+    from futures.toobit import get_current_price
+
+    rows = db.fetch_active("active_signals", status="active")
+
+    for row in rows:
+
+        symbol = row.get("symbol")
+        signal_type = row.get("signal_type", "LONG")
+        entry = row.get("entry_price", 0)
+
+        price = get_current_price(symbol)
+
+        if price is None:
+            continue
+
+        chat_id = row.get("telegram_chat_id")
+        msg_id = row.get("telegram_message_id")
+        row_id = row.get("id")
+
+        stop_loss = row.get("stop_loss", 0)
+
+        stop_hit = (
+            (signal_type == "LONG" and stop_loss and price <= stop_loss)
+            or (signal_type == "SHORT" and stop_loss and price >= stop_loss)
+        )
+
+        if stop_hit and not row.get("hit_stop"):
+
+            pct = _calc_profit_pct(signal_type, entry, price)
+
+            send_message(
+                f"🛑 حد ضرر {symbol} فعال شد\nنتیجه: {pct}%",
+                chat_id=chat_id,
+                reply_to_message_id=msg_id
+            )
+
+            db.update(
+                "active_signals",
+                row_id,
+                {"status": "closed", "hit_stop": 1}
+            )
+
+            continue
+
+        targets = [
+            ("tp1", "hit_tp1", "🥇 TP1"),
+            ("tp2", "hit_tp2", "🥈 TP2"),
+            ("tp3", "hit_tp3", "🥉 TP3"),
+            ("tp4", "hit_tp4", "🏆 TP4"),
+        ]
+
+        highest_target_key = None
+
+        for tp_key, hit_key, _ in targets:
+
+            if row.get(tp_key):
+                highest_target_key = tp_key
+
+        final_hit_now = False
+
+        for tp_key, hit_key, label in targets:
+
+            tp_value = row.get(tp_key, 0)
+
+            if not tp_value or row.get(hit_key):
+                continue
+
+            hit = (
+                (signal_type == "LONG" and price >= tp_value)
+                or (signal_type == "SHORT" and price <= tp_value)
+            )
+
+            if hit:
+
+                pct = _calc_profit_pct(signal_type, entry, price)
+
+                send_message(
+                    f"✅ {label} برای {symbol} خورد!\nسود: {pct}%",
+                    chat_id=chat_id,
+                    reply_to_message_id=msg_id
+                )
+
+                db.update(
+                    "active_signals",
+                    row_id,
+                    {hit_key: 1}
+                )
+
+                if tp_key == highest_target_key:
+                    final_hit_now = True
+
+        if final_hit_now:
+
+            db.update(
+                "active_signals",
+                row_id,
+                {"status": "closed"}
+            )
