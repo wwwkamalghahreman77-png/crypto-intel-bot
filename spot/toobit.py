@@ -22,8 +22,23 @@ def get_spot_opportunities():
 
         print("[TOOBIT SPOT COUNT]", len(data))
 
+        # --- تشخیص مقیاس pcp و qv ---
         if data:
-            print("[SPOT SAMPLE]", data[0].get("s"), "pcp=", data[0].get("pcp"), "qv=", data[0].get("qv"))
+            changes = []
+            volumes = []
+            for c in data:
+                try:
+                    changes.append(float(c.get("pcp", 0)))
+                    volumes.append(float(c.get("qv", 0)))
+                except:
+                    pass
+            if changes:
+                max_change = max(changes, key=abs)
+                count_change_ge_3 = sum(1 for x in changes if abs(x) >= 3)
+                count_vol_ge_1m = sum(1 for v in volumes if v >= 1_000_000)
+                count_both = sum(1 for x, v in zip(changes, volumes) if abs(x) >= 3 and v >= 1_000_000)
+                print(f"[SPOT STATS] max|change|={max_change} | count|change|>=3: {count_change_ge_3} | count volume>=1M: {count_vol_ge_1m} | count both: {count_both}")
+        # --- پایان تشخیص ---
 
     except Exception as e:
         print("[TOOBIT SPOT ERROR]", e)
