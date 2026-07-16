@@ -65,7 +65,7 @@ def get_market_data():
 
                     "symbol": symbol,
 
-                    "change": float(item.get("pcp", 0)),
+                    "change": float(item.get("pcp", 0)) * 100,
 
                     "volume": float(item.get("qv", 0)),
 
