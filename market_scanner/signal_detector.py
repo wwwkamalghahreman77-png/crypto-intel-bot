@@ -7,47 +7,30 @@ def scan_for_signals():
 
     signals = []
 
-
     for coin in coins:
 
         score = 0
         reasons = []
 
-
         change = coin.get("change", 0)
         volume = coin.get("volume", 0)
-        trades = coin.get("trades", 0)
 
-
-        # حرکت اولیه اما نه پامپ شده
         if 2 <= change <= 15:
             score += 25
             reasons.append("حرکت اولیه قیمت")
 
-
-        # حذف ارزهایی که قبلا پامپ سنگین کرده‌اند
         if change > 15:
             continue
 
-
-        # ورود حجم واقعی
-        if volume >= 10000000:
+        if volume >= 1000000:
             score += 35
             reasons.append("ورود حجم سنگین")
 
-        elif volume >= 3000000:
+        elif volume >= 300000:
             score += 20
             reasons.append("افزایش حجم")
 
-
-        # تعداد معاملات
-        if trades >= 50000:
-            score += 20
-            reasons.append("فعالیت بالای معامله‌گران")
-
-
-        # فقط سیگنال قوی
-        if score >= 50:
+        if score >= 40:
 
             signals.append({
 
@@ -55,7 +38,7 @@ def scan_for_signals():
 
                 "type": "LONG",
 
-                "price": coin.get("price",0),
+                "price": coin.get("price", 0),
 
                 "score": score,
 
@@ -66,6 +49,5 @@ def scan_for_signals():
                 "volume": volume
 
             })
-
 
     return signals
