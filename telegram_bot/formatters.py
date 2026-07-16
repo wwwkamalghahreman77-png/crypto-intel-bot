@@ -104,31 +104,95 @@ def format_market_signal(signal: dict) -> str:
 def _format_scanner_signal(signal: dict, title: str, is_futures: bool = False) -> str:
 
     symbol = clean_symbol(signal.get("symbol", ""))
-    badges = build_badges(signal)
-    reason = build_short_reason(signal)
+
+    signal_type = signal.get("type", "").upper()
+
+    if signal_type == "LONG":
+        direction = "🟢 LONG"
+    elif signal_type == "SHORT":
+        direction = "🔴 SHORT"
+    else:
+        direction = "⚪ " + signal_type
+
 
     levels = signal.get("trade_levels") or {}
-    entry = levels.get("entry", "—")
+
+    entry = levels.get("entry", signal.get("price", "—"))
     stop_loss = levels.get("stop_loss", "—")
+
     tp1 = levels.get("tp1", "—")
     tp2 = levels.get("tp2", "—")
     tp3 = levels.get("tp3", "—")
+    tp4 = levels.get("tp4", "—")
 
-    leverage_line = ""
-    if is_futures:
-        leverage = suggest_leverage(signal.get("score", 0), signal.get("risks", []))
-        leverage_line = f"اهرم پیشنهادی: {leverage}\n"
 
-    return (
-        f"{badges} {title} | {symbol} | {signal.get('type','?')}\n"
-        f"{reason}\n"
-        f"ورود: {entry} | استاپ: {stop_loss}\n"
-        f"TP: {tp1} / {tp2} / {tp3}\n"
-        f"{leverage_line}"
-        f"امتیاز: {min(signal.get('score',0), 100)}/100\n"
-        f"⚠️ تحلیلی است، نه تضمین سود."
+    score = min(
+        signal.get("score", 0),
+        100
     )
 
+
+    leverage_line = ""
+
+    if is_futures:
+
+        leverage = suggest_leverage(
+            score,
+            signal.get("risks", [])
+        )
+
+        leverage_line = (
+            f"\n⚡ اهرم پیشنهادی\n"
+            f"{leverage}"
+        )
+
+
+    reasons = signal.get("reasons") or []
+
+
+    if reasons:
+
+        reason_text = "\n".join(
+            [
+                f"✅ {r}"
+                for r in reasons[:4]
+            ]
+        )
+
+    else:
+
+        reason_text = (
+            "✅ تحلیل ترکیبی بازار\n"
+            "✅ بررسی حجم و روند قیمت"
+        )
+
+
+    return f"""
+{direction} | {symbol}
+
+💰 ورود
+{entry}
+
+🎯 اهداف سود
+
+🥇 TP1: {tp1}
+🥈 TP2: {tp2}
+🥉 TP3: {tp3}
+🏆 TP4: {tp4}
+
+🛑 حد ضرر
+{stop_loss}
+
+⚡ قدرت سیگنال
+{score}/100
+{leverage_line}
+
+🧠 دلیل سیگنال
+
+{reason_text}
+
+⚠️ مدیریت سرمایه را رعایت کنید.
+"""
 
 def format_futures_signal(signal: dict) -> str:
     return _format_scanner_signal(signal, "Futures", is_futures=True)
