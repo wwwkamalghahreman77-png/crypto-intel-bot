@@ -18,8 +18,8 @@ import time
 from analysis.indicators import klines_to_df, compute_indicators, score_indicator_bundle
 from analysis.smc import analyze_smc
 
-MIN_SIGNAL_SCORE = 80
-MIN_WATCHLIST_SCORE = 60
+MIN_SIGNAL_SCORE = 68
+MIN_WATCHLIST_SCORE = 50
 
 TIMEFRAMES_MTF = ["15m", "1h", "4h", "1d", "1w"]
 
