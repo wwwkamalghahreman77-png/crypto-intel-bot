@@ -20,10 +20,6 @@ analysis/confluence.py
 spot_scanner.py و market_scanner/signal_detector.py الان امتیاز max/avg هر
 اسکن رو هم لاگ می‌کنن تا اگه بازم لازم بود، این عدد رو دقیق (نه حدسی) روی
 داده‌ی واقعی تنظیم کنیم.
-
-هر فراخوانی می‌تواند min_signal_score / min_watchlist_score اختصاصی بدهد
-(مثلا فیوچرز سخت‌گیرتر از پیش‌فرض مشترک باشد) بدون این‌که آستانه‌ی مشترک
-برای اسپات/مارکت تغییر کند.
 """
 
 import time
@@ -204,6 +200,26 @@ def run_confluence_analysis(symbol, get_klines_fn, signal_meta: dict, direction=
 
     trade_levels = calculate_trade_levels(current_price, swing_low_20d, swing_high_20d, direction)
 
+    # سطوح واچ‌لیست: برخلاف trade_levels (که برای SIGNAL تایید‌شده، ورود = قیمت فعلیه)
+    # اینجا هنوز چیزی تایید نشده، پس باید سطح شکست واقعی (مقاومت/حمایت ۲۰ روزه)
+    # جدا از قیمت فعلی نشون داده بشه، نه اینکه با قیمت فعلی یکی باشه.
+    # بافر ۰.۵٪ (نه ۰.۲٪) تا برای کوین‌های ارزون هم فاصله محسوس بمونه.
+    # ابطال = ۳٪ فاصله از ورود پیشنهادی (سناریوی نزدیک واچ‌لیست)، نه استاپ ساختاری دور trade_levels.
+    if direction == "LONG":
+        level_price = round(swing_high_20d, 8)
+        wl_suggested_entry = round(level_price * 1.005, 8)  # ۰.۵٪ بالاتر از سطح، برای تایید شکست واقعی
+        wl_invalidation = round(wl_suggested_entry * 0.97, 8)  # ۳٪ زیر ورود پیشنهادی
+    else:
+        level_price = round(swing_low_20d, 8)
+        wl_suggested_entry = round(level_price * 0.995, 8)
+        wl_invalidation = round(wl_suggested_entry * 1.03, 8)
+
+    watchlist_levels = {
+        "level_price": level_price,
+        "suggested_entry": wl_suggested_entry,
+        "invalidation": wl_invalidation,
+    }
+
     signal_bar = min_signal_score if min_signal_score is not None else MIN_SIGNAL_SCORE
     watchlist_bar = min_watchlist_score if min_watchlist_score is not None else MIN_WATCHLIST_SCORE
 
@@ -222,6 +238,7 @@ def run_confluence_analysis(symbol, get_klines_fn, signal_meta: dict, direction=
         "reasons": reasons[:8],
         "risks": risks[:5],
         "trade_levels": trade_levels,
+        "watchlist_levels": watchlist_levels,
         "current_price": round(current_price, 8),
         "structure_signal": smc_result.get("structure_signal"),
         "smart_money_alert": extra_result.get("whale_alert", False),
