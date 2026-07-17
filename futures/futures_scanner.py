@@ -44,6 +44,7 @@ def scan_futures(max_results=15):
     print(f"[FuturesScanner] {len(shortlist)} کاندید اولیه پس از پیش‌فیلتر")
 
     results = []
+    all_scores = []
 
     for signal in shortlist:
         symbol = signal["symbol"]
@@ -57,7 +58,12 @@ def scan_futures(max_results=15):
             extra_analyzer=analyze_derivatives,
         )
 
-        if analysis is None or analysis["decision"] == "REJECT":
+        if analysis is None:
+            continue
+
+        all_scores.append(analysis["score"])
+
+        if analysis["decision"] == "REJECT":
             continue
 
         signal.update(analysis)
@@ -65,6 +71,9 @@ def scan_futures(max_results=15):
         results.append(signal)
 
     results.sort(key=lambda s: s["score"], reverse=True)
+
+    if all_scores:
+        print(f"[FuturesScanner] امتیازها: max={max(all_scores)} avg={round(sum(all_scores)/len(all_scores), 1)} (n={len(all_scores)})")
 
     signal_count = sum(1 for r in results if r["decision"] == "SIGNAL")
     watch_count = sum(1 for r in results if r["decision"] == "WATCHLIST")
