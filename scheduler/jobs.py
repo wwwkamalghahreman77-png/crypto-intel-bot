@@ -28,7 +28,7 @@ from database.models import CryptoReport
 from database.signal_history import already_sent, mark_sent
 
 
-MIN_SIGNAL_SCORE = 80
+MIN_SIGNAL_SCORE = 68
 
 
 def save_active_signal(signal, message_id=None):
