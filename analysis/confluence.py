@@ -27,8 +27,8 @@ from analysis.indicators import (
 from analysis.smc import analyze_smc
 
 
-MIN_SIGNAL_SCORE = 80
-MIN_WATCHLIST_SCORE = 60
+MIN_SIGNAL_SCORE = 55
+MIN_WATCHLIST_SCORE = 35
 
 TIMEFRAMES_MTF = [
     "15m",
