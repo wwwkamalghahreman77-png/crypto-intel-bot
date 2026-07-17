@@ -56,6 +56,8 @@ def scan_futures(max_results=15):
             signal_meta=signal,
             direction=direction,
             extra_analyzer=analyze_derivatives,
+            min_signal_score=70,     # فیوچرز سخت‌گیرتر از پیش‌فرض (۵۵) - کمتر ولی قوی‌تر
+            min_watchlist_score=50,
         )
 
         if analysis is None:
