@@ -28,7 +28,7 @@ from database.models import CryptoReport
 from database.signal_history import already_sent, mark_sent
 
 
-MIN_SIGNAL_SCORE = 68
+MIN_SIGNAL_SCORE = 55  # هماهنگ با آستانه‌ی جدید analysis/confluence.py
 
 
 def save_active_signal(signal, message_id=None):
