@@ -105,7 +105,7 @@ def _format_scanner_signal(signal: dict, title: str, is_futures: bool = False) -
 
     symbol = clean_symbol(signal.get("symbol", ""))
 
-    signal_type = signal.get("type", "").upper()
+    signal_type = (signal.get("direction") or signal.get("type") or "").upper()
 
     if signal_type == "LONG":
         direction = "🟢 LONG"
