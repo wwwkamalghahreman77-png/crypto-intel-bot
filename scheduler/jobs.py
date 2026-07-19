@@ -376,67 +376,7 @@ def process_confluence_signal(
 
     if decision == "SIGNAL":
 
-        if active_signal_exists(
-            symbol
-        ):
-
-            return
-
-        if already_sent(
-
-            symbol,
-
-            signal.get(
-                "structure_signal"
-            )
-
-            or
-
-            signal.get(
-                "direction",
-                "UNKNOWN"
-            ),
-
-            signal.get(
-                "score",
-                0
-            ),
-
-            signal.get(
-                "score",
-                0
-            )
-
-        ):
-
-            return
-
-        mark_sent(
-
-            symbol,
-
-            signal.get(
-                "structure_signal"
-            )
-
-            or
-
-            signal.get(
-                "direction",
-                "UNKNOWN"
-            ),
-
-            signal.get(
-                "score",
-                0
-            ),
-
-            signal.get(
-                "score",
-                0
-            )
-
-        )
+        
 
         text = formatter(
             signal
