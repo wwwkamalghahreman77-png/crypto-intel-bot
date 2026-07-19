@@ -107,28 +107,7 @@ class ActiveSignal:
         return asdict(self)
 
 
-@dataclass
-class WatchlistItem:
 
-    symbol: str
-    direction: str
-
-    trigger_price: float
-    invalidation_price: float
-    suggested_entry: float
-
-    score: float
-    reason: str
-
-    telegram_chat_id: str = ""
-    telegram_message_id: int = 0
-
-    status: str = "watching"
-
-    date_found: str = ""
-
-    def to_dict(self):
-        return asdict(self)
 
 
 @dataclass
