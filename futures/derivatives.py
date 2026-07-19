@@ -1,18 +1,4 @@
-"""
-futures/derivatives.py
-
-دیتای مشتقات از توبیت:
-Funding Rate, Open Interest, Long/Short Ratio.
-
-اندپوینت‌ها:
-    GET /api/v1/futures/fundingRate
-    GET /quote/v1/openInterest
-    GET /quote/v1/globalLongShortAccountRatio
-
-نکته:
-این اندپوینت‌ها فقط برای نمادهای فیوچرز
-(فرمت BTC-SWAP-USDT) کار می‌کنند.
-"""
+# futures/derivatives.py
 
 import requests
 
@@ -27,41 +13,76 @@ BASE_URL = (
 )
 
 
+REQUEST_TIMEOUT = 10
+
+
+def _safe_float(
+    value,
+    default=None
+):
+
+    try:
+
+        if value is None:
+            return default
+
+        return float(
+            value
+        )
+
+    except (
+        TypeError,
+        ValueError
+    ):
+
+        return default
+
+
 def get_funding_rate(
     symbol: str
 ) -> "dict | None":
 
     try:
 
-        url = (
-            BASE_URL
-            + "/api/v1/futures/fundingRate"
-        )
-
-        resp = requests.get(
-            url,
+        response = requests.get(
+            (
+                BASE_URL
+                + "/api/v1/futures/fundingRate"
+            ),
             params={
                 "symbol": symbol
             },
-            timeout=10
+            timeout=REQUEST_TIMEOUT
         )
 
-        data = resp.json()
+        response.raise_for_status()
+
+        data = response.json()
 
         if (
-            isinstance(data, list)
+            isinstance(
+                data,
+                list
+            )
             and data
         ):
 
             row = data[0]
 
+            rate = _safe_float(
+                row.get(
+                    "rate"
+                )
+            )
+
+            if rate is None:
+
+                return None
+
             return {
-                "rate": float(
-                    row.get(
-                        "rate",
-                        0
-                    )
-                ),
+
+                "rate":
+                    rate,
 
                 "next_funding_time":
                     row.get(
@@ -75,7 +96,7 @@ def get_funding_rate(
 
         print(
             f"[Derivatives] "
-            f"خطا در دریافت فاندینگ ریت "
+            f"Funding error "
             f"{symbol}: {e}"
         )
 
@@ -88,20 +109,20 @@ def get_open_interest(
 
     try:
 
-        url = (
-            BASE_URL
-            + "/quote/v1/openInterest"
-        )
-
-        resp = requests.get(
-            url,
+        response = requests.get(
+            (
+                BASE_URL
+                + "/quote/v1/openInterest"
+            ),
             params={
                 "symbol": symbol
             },
-            timeout=10
+            timeout=REQUEST_TIMEOUT
         )
 
-        data = resp.json()
+        response.raise_for_status()
+
+        data = response.json()
 
         rows = (
             data.get(
@@ -115,6 +136,10 @@ def get_open_interest(
             else []
         )
 
+        if not rows:
+
+            return None
+
         for row in rows:
 
             if (
@@ -124,29 +149,23 @@ def get_open_interest(
                 == symbol
             ):
 
-                return float(
+                return _safe_float(
                     row.get(
-                        "size",
-                        0
+                        "size"
                     )
                 )
 
-        if rows:
-
-            return float(
-                rows[0].get(
-                    "size",
-                    0
-                )
+        return _safe_float(
+            rows[0].get(
+                "size"
             )
-
-        return None
+        )
 
     except Exception as e:
 
         print(
             f"[Derivatives] "
-            f"خطا در دریافت Open Interest "
+            f"Open Interest error "
             f"{symbol}: {e}"
         )
 
@@ -160,60 +179,75 @@ def get_long_short_ratio(
 
     try:
 
-        url = (
-            BASE_URL
-            + "/quote/v1/globalLongShortAccountRatio"
-        )
-
-        resp = requests.get(
-            url,
+        response = requests.get(
+            (
+                BASE_URL
+                + "/quote/v1/"
+                "globalLongShortAccountRatio"
+            ),
             params={
                 "symbol": symbol,
                 "period": period,
                 "limit": 1
             },
-            timeout=10
+            timeout=REQUEST_TIMEOUT
         )
 
-        data = resp.json()
+        response.raise_for_status()
+
+        data = response.json()
 
         if (
-            isinstance(data, list)
-            and data
+            not isinstance(
+                data,
+                list
+            )
+            or not data
         ):
 
-            row = data[0]
+            return None
 
-            return {
-                "ratio": float(
-                    row.get(
-                        "longShortRatio",
-                        0
-                    )
-                ),
+        row = data[0]
 
-                "long_account": float(
-                    row.get(
-                        "longAccount",
-                        0
-                    )
-                ),
+        ratio = _safe_float(
+            row.get(
+                "longShortRatio"
+            )
+        )
 
-                "short_account": float(
-                    row.get(
-                        "shortAccount",
-                        0
-                    )
-                ),
-            }
+        long_account = _safe_float(
+            row.get(
+                "longAccount"
+            )
+        )
 
-        return None
+        short_account = _safe_float(
+            row.get(
+                "shortAccount"
+            )
+        )
+
+        if ratio is None:
+
+            return None
+
+        return {
+
+            "ratio":
+                ratio,
+
+            "long_account":
+                long_account,
+
+            "short_account":
+                short_account,
+        }
 
     except Exception as e:
 
         print(
             f"[Derivatives] "
-            f"خطا در دریافت Long/Short Ratio "
+            f"Long/Short error "
             f"{symbol}: {e}"
         )
 
@@ -224,17 +258,42 @@ def get_previous_oi(
     symbol: str
 ) -> "float | None":
 
-    rows = db.fetch_by_token(
-        "derivatives_snapshot",
-        symbol
-    )
+    try:
 
-    if not rows:
+        rows = db.fetch_by_token(
+            "derivatives_snapshot",
+            symbol
+        )
+
+        if not rows:
+
+            return None
+
+        for row in reversed(
+            rows
+        ):
+
+            value = _safe_float(
+                row.get(
+                    "open_interest"
+                )
+            )
+
+            if value is not None:
+
+                return value
+
         return None
 
-    return rows[-1].get(
-        "open_interest"
-    )
+    except Exception as e:
+
+        print(
+            "[Derivatives] "
+            "خطا در دریافت OI قبلی:",
+            e
+        )
+
+        return None
 
 
 def save_oi_snapshot(
@@ -248,10 +307,18 @@ def save_oi_snapshot(
         db.insert(
             "derivatives_snapshot",
             {
-                "token": symbol,
-                "open_interest": open_interest,
-                "funding_rate": funding_rate,
-                "date_found": now_str(),
+
+                "token":
+                    symbol,
+
+                "open_interest":
+                    open_interest,
+
+                "funding_rate":
+                    funding_rate,
+
+                "date_found":
+                    now_str(),
             }
         )
 
@@ -270,12 +337,14 @@ def analyze_derivatives(
 ) -> dict:
 
     reasons = []
+
     risks = []
 
     score = 0.0
 
     is_long = (
-        direction == "LONG"
+        direction.upper()
+        == "LONG"
     )
 
     funding = get_funding_rate(
@@ -292,9 +361,9 @@ def analyze_derivatives(
 
     if funding is not None:
 
-        rate = funding[
+        rate = funding.get(
             "rate"
-        ]
+        )
 
         if is_long:
 
@@ -303,17 +372,15 @@ def analyze_derivatives(
                 score += 3
 
                 reasons.append(
-                    f"فاندینگ ریت منفی "
-                    f"({round(rate * 100, 4)}%) "
-                    f"- شورت‌ها هزینه می‌دهند"
+                    f"Funding منفی "
+                    f"({round(rate * 100, 4)}%)"
                 )
 
-            elif rate > 0.05:
+            elif rate >= 0.0005:
 
                 risks.append(
-                    f"فاندینگ ریت بسیار مثبت "
-                    f"({round(rate * 100, 4)}%) "
-                    f"- ازدحام لانگ"
+                    f"Funding مثبت بالا "
+                    f"({round(rate * 100, 4)}%)"
                 )
 
         else:
@@ -323,89 +390,88 @@ def analyze_derivatives(
                 score += 3
 
                 reasons.append(
-                    f"فاندینگ ریت مثبت "
-                    f"({round(rate * 100, 4)}%) "
-                    f"- لانگ‌ها هزینه می‌دهند"
+                    f"Funding مثبت "
+                    f"({round(rate * 100, 4)}%)"
                 )
 
-            elif rate < -0.05:
+            elif rate <= -0.0005:
 
                 risks.append(
-                    f"فاندینگ ریت بسیار منفی "
-                    f"({round(rate * 100, 4)}%) "
-                    f"- ازدحام شورت"
+                    f"Funding منفی بالا "
+                    f"({round(rate * 100, 4)}%)"
                 )
 
     if ls_ratio is not None:
 
-        ratio = ls_ratio[
+        ratio = ls_ratio.get(
             "ratio"
-        ]
+        )
 
-        if (
-            is_long
-            and ratio < 1.0
-        ):
+        if ratio is not None:
 
-            score += 3
+            if (
+                is_long
+                and ratio < 1.0
+            ):
 
-            reasons.append(
-                f"اکثریت معامله‌گران شورت هستند "
-                f"(L/S={ratio}) "
-                f"- فضای رشد برای لانگ باقی است"
-            )
+                score += 3
 
-        elif (
-            not is_long
-            and ratio > 1.5
-        ):
+                reasons.append(
+                    f"نسبت Long/Short "
+                    f"به نفع شورت‌هاست "
+                    f"(L/S={round(ratio, 2)})"
+                )
 
-            score += 3
+            elif (
+                not is_long
+                and ratio > 1.5
+            ):
 
-            reasons.append(
-                f"اکثریت معامله‌گران لانگ هستند "
-                f"(L/S={ratio}) "
-                f"- فضای ریزش برای شورت باقی است"
-            )
+                score += 3
 
-        elif (
-            is_long
-            and ratio > 3
-        ):
+                reasons.append(
+                    f"نسبت Long/Short "
+                    f"به نفع لانگ‌هاست "
+                    f"(L/S={round(ratio, 2)})"
+                )
 
-            risks.append(
-                f"اکثریت شدید معامله‌گران لانگ هستند "
-                f"(L/S={ratio}) "
-                f"- ریسک تخلیه لانگ"
-            )
+            if (
+                is_long
+                and ratio > 3
+            ):
 
-        elif (
-            not is_long
-            and ratio < 0.5
-        ):
+                risks.append(
+                    f"ازدحام شدید لانگ "
+                    f"(L/S={round(ratio, 2)})"
+                )
 
-            risks.append(
-                f"اکثریت شدید معامله‌گران شورت هستند "
-                f"(L/S={ratio}) "
-                f"- ریسک اسکوییز شورت"
-            )
+            elif (
+                not is_long
+                and ratio < 0.5
+            ):
+
+                risks.append(
+                    f"ازدحام شدید شورت "
+                    f"(L/S={round(ratio, 2)})"
+                )
 
     if oi is not None:
 
-        prev_oi = get_previous_oi(
+        previous_oi = get_previous_oi(
             symbol
         )
 
         if (
-            prev_oi
-            and prev_oi > 0
+            previous_oi is not None
+            and previous_oi > 0
         ):
 
             oi_change_pct = (
                 (
-                    oi - prev_oi
+                    oi
+                    - previous_oi
                 )
-                / prev_oi
+                / previous_oi
                 * 100
             )
 
@@ -415,65 +481,78 @@ def analyze_derivatives(
 
                 reasons.append(
                     f"Open Interest "
-                    f"در حال افزایش "
-                    f"({round(oi_change_pct, 1)}%) "
-                    f"- ورود سرمایه تازه"
+                    f"{round(oi_change_pct, 1)}٪ "
+                    f"افزایش یافته"
                 )
 
             elif oi_change_pct <= -3:
 
                 risks.append(
                     f"Open Interest "
-                    f"در حال کاهش "
-                    f"({round(oi_change_pct, 1)}%) "
-                    f"- خروج سرمایه"
+                    f"{round(oi_change_pct, 1)}٪ "
+                    f"کاهش یافته"
                 )
 
         save_oi_snapshot(
             symbol,
             oi,
-            funding["rate"]
+            funding.get(
+                "rate",
+                0
+            )
             if funding
             else 0
         )
 
     whale_alert = False
 
-    if (
-        ls_ratio is not None
-        and
-        (
-            ls_ratio["ratio"] > 4
-            or
-            ls_ratio["ratio"] < 0.25
-        )
-    ):
+    if ls_ratio is not None:
 
-        whale_alert = True
+        ratio = ls_ratio.get(
+            "ratio"
+        )
+
+        if (
+            ratio is not None
+            and (
+                ratio >= 4
+                or ratio <= 0.25
+            )
+        ):
+
+            whale_alert = True
 
     return {
 
-        "score": round(
-            min(
-                score,
-                15
+        "score":
+            round(
+                min(
+                    score,
+                    15
+                ),
+                1
             ),
-            1
-        ),
 
-        "reasons": reasons,
+        "reasons":
+            reasons,
 
-        "risks": risks,
+        "risks":
+            risks,
 
         "funding_rate":
-            funding["rate"]
+            funding.get(
+                "rate"
+            )
             if funding
             else None,
 
-        "open_interest": oi,
+        "open_interest":
+            oi,
 
         "long_short_ratio":
-            ls_ratio["ratio"]
+            ls_ratio.get(
+                "ratio"
+            )
             if ls_ratio
             else None,
 
