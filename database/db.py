@@ -96,29 +96,6 @@ CREATE_TABLES_SQL = {
         )
     """,
 
-    "watchlist": """
-        CREATE TABLE IF NOT EXISTS watchlist (
-
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-
-            symbol TEXT,
-            direction TEXT,
-
-            trigger_price REAL,
-            invalidation_price REAL,
-            suggested_entry REAL,
-
-            score REAL,
-            reason TEXT,
-
-            telegram_chat_id TEXT,
-            telegram_message_id INTEGER,
-
-            status TEXT DEFAULT 'watching',
-
-            date_found TEXT
-        )
-    """,
 
     "closed_trades": """
         CREATE TABLE IF NOT EXISTS closed_trades (
@@ -403,7 +380,7 @@ class Database:
         field: str,
         value
     ):
-        """مشابه fetch_by_token ولی برای هر ستونی (مثلا symbol در جدول watchlist)"""
+        """مشابه fetch_by_token ولی برای هر ستونی"""
 
         if self.use_supabase:
 
