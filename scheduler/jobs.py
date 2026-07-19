@@ -45,6 +45,7 @@ from database.signal_history import (
     mark_sent,
 )
 
+
 MIN_SIGNAL_SCORE = 55
 
 
@@ -376,7 +377,57 @@ def process_confluence_signal(
 
     if decision == "SIGNAL":
 
-        
+        if active_signal_exists(
+            symbol
+        ):
+
+            return
+
+        signal_type = (
+
+            signal.get(
+                "structure_signal"
+            )
+
+            or
+
+            signal.get(
+                "direction",
+                "UNKNOWN"
+            )
+
+        )
+
+        score = signal.get(
+            "score",
+            0
+        )
+
+        if already_sent(
+
+            symbol,
+
+            signal_type,
+
+            score,
+
+            score
+
+        ):
+
+            return
+
+        mark_sent(
+
+            symbol,
+
+            signal_type,
+
+            score,
+
+            score
+
+        )
 
         text = formatter(
             signal
@@ -387,10 +438,15 @@ def process_confluence_signal(
         )
 
         log_telegram_message(
+
             "signal",
+
             symbol,
+
             message_id,
+
             preview=text
+
         )
 
         save_active_signal(
@@ -400,8 +456,11 @@ def process_confluence_signal(
                 **signal,
 
                 "type": signal.get(
+
                     "direction",
+
                     "LONG"
+
                 )
 
             },
@@ -681,9 +740,7 @@ def job_market_scan():
 
             continue
 
-        if already_sent(
-
-            symbol,
+        signal_type = (
 
             signal.get(
                 "structure_signal"
@@ -694,17 +751,24 @@ def job_market_scan():
             signal.get(
                 "type",
                 "UNKNOWN"
-            ),
-
-            signal.get(
-                "score",
-                0
-            ),
-
-            signal.get(
-                "score",
-                0
             )
+
+        )
+
+        score = signal.get(
+            "score",
+            0
+        )
+
+        if already_sent(
+
+            symbol,
+
+            signal_type,
+
+            score,
+
+            score
 
         ):
 
@@ -714,26 +778,11 @@ def job_market_scan():
 
             symbol,
 
-            signal.get(
-                "structure_signal"
-            )
+            signal_type,
 
-            or
+            score,
 
-            signal.get(
-                "type",
-                "UNKNOWN"
-            ),
-
-            signal.get(
-                "score",
-                0
-            ),
-
-            signal.get(
-                "score",
-                0
-            )
+            score
 
         )
 
