@@ -1053,3 +1053,197 @@ def format_coiling_alert(
 که تأییدیه‌های لازم را گرفته‌اند
 و هنوز حرکت اصلی را کامل انجام نداده‌اند.
 """
+    METAL_LABELS = {
+    "GOLD": "🥇 طلا (Gold)",
+    "SILVER": "🥈 نقره (Silver)",
+    "COPPER": "🟤 مس (Copper)",
+}
+
+
+def format_metal_report(
+    signal: dict
+) -> str:
+
+    metal = signal.get(
+        "symbol",
+        ""
+    )
+
+    label = METAL_LABELS.get(
+        metal,
+        metal
+    )
+
+    direction = signal.get(
+        "direction",
+        "LONG"
+    )
+
+    direction_text = (
+        "🟢 چشم‌انداز صعودی"
+        if direction == "LONG"
+        else
+        "🔴 چشم‌انداز نزولی"
+    )
+
+    score = signal.get(
+        "score",
+        0
+    )
+
+    decision = signal.get(
+        "decision",
+        "REJECT"
+    )
+
+    decision_text = (
+        "✅ تأیید چندگانه (SIGNAL)"
+        if decision == "SIGNAL"
+        else
+        "⚪ در حد نظارت (بدون تأیید کامل)"
+    )
+
+    reasons = (
+        signal.get(
+            "reasons"
+        )
+        or []
+    )
+
+    reasons_text = "\n".join(
+        f"✅ {r}"
+        for r in reasons[:6]
+    )
+
+    if not reasons_text:
+
+        reasons_text = (
+            "تحلیل بر اساس اندیکاتورها و ساختار قیمت"
+        )
+
+    trade_plan = _format_trade_plan(
+        signal
+    )
+
+    return f"""
+📊 تحلیل روزانه {label}
+
+{direction_text}
+
+━━━━━━━━━━━━━━
+
+💰 قیمت فعلی
+{_fmt_price(signal.get('current_price'))}
+
+⭐ امتیاز اطمینان
+{score}/100
+
+📌 وضعیت
+{decision_text}
+
+🧠 دلایل تحلیل
+{reasons_text}
+
+🎯 سناریوی محتمل
+{trade_plan}
+
+⚠️ این گزارش روزانه است، نه سیگنال قطعی معامله.
+مدیریت سرمایه با خودتان است.
+"""
+METAL_LABELS = {
+    "GOLD": "🥇 طلا (Gold)",
+    "SILVER": "🥈 نقره (Silver)",
+    "COPPER": "🟤 مس (Copper)",
+}
+
+
+def format_metal_report(
+    signal: dict
+) -> str:
+
+    metal = signal.get(
+        "symbol",
+        ""
+    )
+
+    label = METAL_LABELS.get(
+        metal,
+        metal
+    )
+
+    direction = signal.get(
+        "direction",
+        "LONG"
+    )
+
+    direction_text = (
+        "🟢 چشم‌انداز صعودی"
+        if direction == "LONG"
+        else
+        "🔴 چشم‌انداز نزولی"
+    )
+
+    score = signal.get(
+        "score",
+        0
+    )
+
+    decision = signal.get(
+        "decision",
+        "REJECT"
+    )
+
+    decision_text = (
+        "✅ تأیید چندگانه (SIGNAL)"
+        if decision == "SIGNAL"
+        else
+        "⚪ در حد نظارت (بدون تأیید کامل)"
+    )
+
+    reasons = (
+        signal.get(
+            "reasons"
+        )
+        or []
+    )
+
+    reasons_text = "\n".join(
+        f"✅ {r}"
+        for r in reasons[:6]
+    )
+
+    if not reasons_text:
+
+        reasons_text = (
+            "تحلیل بر اساس اندیکاتورها و ساختار قیمت"
+        )
+
+    trade_plan = _format_trade_plan(
+        signal
+    )
+
+    return f"""
+📊 تحلیل روزانه {label}
+
+{direction_text}
+
+━━━━━━━━━━━━━━
+
+💰 قیمت فعلی
+{_fmt_price(signal.get('current_price'))}
+
+⭐ امتیاز اطمینان
+{score}/100
+
+📌 وضعیت
+{decision_text}
+
+🧠 دلایل تحلیل
+{reasons_text}
+
+🎯 سناریوی محتمل
+{trade_plan}
+
+⚠️ این گزارش روزانه است، نه سیگنال قطعی معامله.
+مدیریت سرمایه با خودتان است.
+"""
