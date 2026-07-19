@@ -1,5 +1,3 @@
-# analysis/scoring.py
-
 WEIGHTS = {
     "security": 0.25,
     "fundamental": 0.20,
@@ -55,4 +53,6 @@ def classify_status(
 
         return "WATCHLIST"
 
-    return "REJECT"
+    else:
+
+        return "REJECT"
