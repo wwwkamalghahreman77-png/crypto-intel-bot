@@ -172,7 +172,6 @@ def scan_spot(
             )
         )
 
-        # REJECT فقط زمانی حذف شود که هیچ هشدار مستقلی ندارد
         if (
             analysis["decision"]
             == "REJECT"
