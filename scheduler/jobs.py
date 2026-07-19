@@ -1008,4 +1008,3 @@ for row in rows:
             close_reason="ALL_TARGETS_HIT",
             highest_tp_hit=final_label
         )
-این نسخه را کامل جایگزین scheduler/jobs.py کن. بعد از اجرای python main.py all، اگر پیام جدیدی تولید شود باید در لاگ برای هر مقصدی که در telegram_bot/bot.py تنظیم کرده‌ای، خط ارسال موفق دیده شود.
