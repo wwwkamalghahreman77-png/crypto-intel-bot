@@ -335,7 +335,7 @@ def calculate_trade_levels(
 
         return None
 
-    return {
+    result = {
 
         "entry": round(
             current_price,
@@ -343,35 +343,31 @@ def calculate_trade_levels(
         ),
 
         "stop_loss": stop_loss,
-
-        "tp1": round(
-            current_price
-            -
-            risk * 1,
-            8
-        ),
-
-        "tp2": round(
-            current_price
-            -
-            risk * 2,
-            8
-        ),
-
-        "tp3": round(
-            current_price
-            -
-            risk * 3,
-            8
-        ),
-
-        "tp4": round(
-            current_price
-            -
-            risk * 4,
-            8
-        ),
     }
+
+    # قیمت هرگز نمی‌تواند منفی یا صفر شود؛
+    # اگر ریسک نسبت به قیمت فعلی خیلی بزرگ باشد
+    # (مثلاً در شکست ساختار بلندمدت با فاصله زیاد
+    # تا سقف نوسان)، از یک سطح به بعد دیگر TP
+    # تولید نمی‌شود به‌جای اینکه قیمت منفی چاپ شود.
+    for i in range(1, 5):
+
+        target = (
+            current_price
+            -
+            risk * i
+        )
+
+        if target <= 0:
+
+            break
+
+        result[f"tp{i}"] = round(
+            target,
+            8
+        )
+
+    return result
 
 
 def _safe_float(
