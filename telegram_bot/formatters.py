@@ -358,8 +358,6 @@ def _format_trade_plan(
         "",
         "💰 نقطه فعال‌شدن سناریو",
         f"{_fmt_price(entry)}",
-        "",
-        "🎯 اهداف احتمالی حرکت",
     ]
 
     icons = [
@@ -368,6 +366,8 @@ def _format_trade_plan(
         "🥉",
         "🏆",
     ]
+
+    target_lines = []
 
     for index, icon in enumerate(
         icons,
@@ -388,11 +388,17 @@ def _format_trade_plan(
             direction
         )
 
-        lines.append(
+        target_lines.append(
             f"{icon} {key.upper()}: "
             f"{_fmt_price(target)} "
             f"(+{profit}%)"
         )
+
+    if target_lines:
+
+        lines.append("")
+        lines.append("🎯 اهداف احتمالی حرکت")
+        lines.extend(target_lines)
 
     if stop:
 
