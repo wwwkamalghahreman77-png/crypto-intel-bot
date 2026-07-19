@@ -1618,10 +1618,29 @@ def job_monitor_active_signals():
 
                 (
                     signal_type == "SHORT"
-                    and price <= tp_value
-                )
+        for tp_key, hit_key, label in targets:
 
+            tp_value = row.get(
+                tp_key,
+                0
             )
+
+            if (
+                not tp_value
+                or row.get(
+                    hit_key
+                )
+            ):
+
+                continue
+
+            if signal_type == "LONG":
+
+                hit = price >= tp_value
+
+            else:
+
+                hit = price <= tp_value
 
             if hit:
 
@@ -1663,7 +1682,6 @@ def job_monitor_active_signals():
                     final_hit_now = True
 
                     final_label = tp_key
-
         if final_hit_now:
 
             db.update(
