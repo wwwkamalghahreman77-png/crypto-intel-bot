@@ -1148,290 +1148,11 @@ def _save_closed_trade(
 def job_monitor_active_signals():
 
     from futures.toobit import (
-
-        get_current_price as
-        get_futures_price
-
+        get_current_price as get_futures_price
     )
 
     from spot.toobit import (
-
-        get_current_price as
-        get_spot_price
-
-    )
-
-    rows = db.fetch_active(
-
-        "active_signals",
-
-        status="active"
-
-    )
-
-    for row in rows:
-
-        symbol = row.get(
-            "symbol"
-        )
-
-        signal_type = row.get(
-
-            "signal_type",
-
-            "LONG"
-
-        )
-
-        entry = row.get(
-
-            "entry_price",
-
-            0
-
-        )
-
-        price = get_futures_price(
-            symbol
-        )
-
-        if price is None:
-
-            price = get_spot_price(
-                symbol
-            )
-
-        if price is None:
-
-            continue
-
-        chat_id = row.get(
-
-            "telegram_chat_id"
-
-        )
-
-        msg_id = row.get(
-
-            "telegram_message_id"
-
-        )
-
-        row_id = row.get(
-            "id"
-        )
-
-        stop_loss = row.get(
-
-            "stop_loss",
-
-            0
-
-        )
-
-        stop_hit = (
-
-            (
-
-                signal_type == "LONG"
-
-                and stop_loss
-
-                and price <= stop_loss
-
-            )
-
-            or
-
-            (
-
-                signal_type == "SHORT"
-
-                and stop_loss
-
-                and price >= stop_loss
-
-            )
-
-        )
-
-        if stop_hit and not row.get(
-            "hit_stop"
-        ):
-
-            pct = _calc_profit_pct(
-
-                signal_type,
-
-                entry,
-
-                price
-
-            )
-
-            text = (
-
-                f"🛑 حد ضرر "
-                f"{symbol} فعال شد\n"
-
-                f"نتیجه: "
-                f"{pct}%"
-
-            )
-
-            new_msg_id = send_message(
-
-                text,
-
-                chat_id=chat_id,
-
-                reply_to_message_id=msg_id
-
-            )
-
-            log_telegram_message(
-
-                "stop_hit",
-
-                symbol,
-
-                new_msg_id,
-
-                reply_to=msg_id,
-
-                preview=text
-
-            )
-
-            db.update(
-
-                "active_signals",
-
-                row_id,
-
-                {
-
-                    "status":
-                        "closed",
-
-                    "hit_stop":
-                        1
-
-                }
-
-            )
-
-            _save_closed_trade(
-
-                row,
-
-                price,
-
-                close_reason="STOP_LOSS"
-
-            )
-
-            continue
-
-        targets = [
-
-            (
-
-                "tp1",
-
-                "hit_tp1",
-
-                "🥇 TP1"
-
-            ),
-
-            (
-
-                "tp2",
-
-                "hit_tp2",
-
-                "🥈 TP2"
-
-            ),
-
-            (
-
-                "tp3",
-
-                "hit_tp3",
-
-                "🥉 TP3"
-
-            ),
-
-            (
-
-                "tp4",
-
-                "hit_tp4",
-
-                "🏆 TP4"
-
-            ),
-
-        ]
-
-        highest_target_key = None
-
-        for tp_key, hit_key, _ in targets:
-
-            if row.get(
-                tp_key
-            ):
-
-                highest_target_key = tp_key
-
-        final_hit_now = False
-
-        final_label = None
-
-        for tp_key, hit_key, label in targets:
-
-            tp_value = row.get(
-
-                tp_key,
-
-                0
-
-            )
-
-            if (
-
-                not tp_value
-
-                or row.get(
-                    hit_key
-                )
-
-            ):
-
-                continue
-
-            hit = (
-
-                (
-
-                    signal_type == "LONG"
-
-                    and price >= tp_value
-
-                )
-def job_monitor_active_signals():
-
-    from futures.toobit import (
-        get_current_price as
-        get_futures_price
-    )
-
-    from spot.toobit import (
-        get_current_price as
-        get_spot_price
+        get_current_price as get_spot_price
     )
 
     rows = db.fetch_active(
@@ -1486,23 +1207,19 @@ def job_monitor_active_signals():
             0
         )
 
-        stop_hit = (
+        if signal_type == "LONG":
 
-            (
-                signal_type == "LONG"
-                and stop_loss
+            stop_hit = (
+                stop_loss
                 and price <= stop_loss
             )
 
-            or
+        else:
 
-            (
-                signal_type == "SHORT"
-                and stop_loss
+            stop_hit = (
+                stop_loss
                 and price >= stop_loss
             )
-
-        )
 
         if stop_hit and not row.get(
             "hit_stop"
@@ -1580,7 +1297,7 @@ def job_monitor_active_signals():
 
         highest_target_key = None
 
-        for tp_key, hit_key, _ in targets:
+        for tp_key, hit_key, label in targets:
 
             if row.get(
                 tp_key
@@ -1589,6 +1306,7 @@ def job_monitor_active_signals():
                 highest_target_key = tp_key
 
         final_hit_now = False
+
         final_label = None
 
         for tp_key, hit_key, label in targets:
@@ -1598,38 +1316,12 @@ def job_monitor_active_signals():
                 0
             )
 
-            if (
-                not tp_value
-                or row.get(
-                    hit_key
-                )
-            ):
+            if not tp_value:
 
                 continue
 
-            hit = (
-
-                (
-                    signal_type == "LONG"
-                    and price >= tp_value
-                )
-
-                or
-
-                (
-                    signal_type == "SHORT"
-        for tp_key, hit_key, label in targets:
-
-            tp_value = row.get(
-                tp_key,
-                0
-            )
-
-            if (
-                not tp_value
-                or row.get(
-                    hit_key
-                )
+            if row.get(
+                hit_key
             ):
 
                 continue
@@ -1642,46 +1334,49 @@ def job_monitor_active_signals():
 
                 hit = price <= tp_value
 
-            if hit:
+            if not hit:
 
-                pct = _calc_profit_pct(
-                    signal_type,
-                    entry,
-                    price
-                )
+                continue
 
-                text = (
-                    f"✅ {label} برای {symbol} خورد!\n"
-                    f"سود: {pct}%"
-                )
+            pct = _calc_profit_pct(
+                signal_type,
+                entry,
+                price
+            )
 
-                new_msg_id = send_message(
-                    text,
-                    chat_id=chat_id,
-                    reply_to_message_id=msg_id
-                )
+            text = (
+                f"✅ {label} برای {symbol} خورد!\n"
+                f"سود: {pct}%"
+            )
 
-                log_telegram_message(
-                    "tp_hit",
-                    symbol,
-                    new_msg_id,
-                    reply_to=msg_id,
-                    preview=text
-                )
+            new_msg_id = send_message(
+                text,
+                chat_id=chat_id,
+                reply_to_message_id=msg_id
+            )
 
-                db.update(
-                    "active_signals",
-                    row_id,
-                    {
-                        hit_key: 1
-                    }
-                )
+            log_telegram_message(
+                "tp_hit",
+                symbol,
+                new_msg_id,
+                reply_to=msg_id,
+                preview=text
+            )
 
-                if tp_key == highest_target_key:
+            db.update(
+                "active_signals",
+                row_id,
+                {
+                    hit_key: 1
+                }
+            )
 
-                    final_hit_now = True
+            if tp_key == highest_target_key:
 
-                    final_label = tp_key
+                final_hit_now = True
+
+                final_label = tp_key
+
         if final_hit_now:
 
             db.update(
@@ -1759,9 +1454,6 @@ def job_daily_metals_report():
         return
 
     signal["symbol"] = "GOLD"
-
-    # تحلیل روزانه صرف نظر از SIGNAL/REJECT
-    # همیشه ارسال می‌شود؛ چون گزارش است نه سیگنال معاملاتی
 
     text = format_metal_report(
         signal
