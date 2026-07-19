@@ -111,30 +111,142 @@ def log_telegram_message(message_type, symbol, message_id, reply_to=None, previe
 
 
 def check_catalyst_and_trendline_alerts(signal):
-    """
-    بررسی مستقل از decision کانفلوئنس: الگوی کاتالیزوری شبیه AKE/BANK و شکست خط
-    روند بلندمدت. چون این حرکت‌ها معمولاً سریع‌تر از رسیدن به آستانه‌ی SIGNAL
-    کامل اتفاق می‌افتن، این هشدارها حتی برای سیگنال‌های REJECT هم بررسی و
-    (در صورت تطبیق) ارسال می‌شوند. هر کدام فقط یک‌بار برای هر نماد ارسال می‌شود.
-    """
 
-    symbol = signal.get("symbol")
+    symbol = signal.get(
+        "symbol"
+    )
 
-    catalyst = signal.get("catalyst_breakout") or {}
-    if catalyst.get("match"):
-        if not already_sent(symbol, "CATALYST_BREAKOUT", 0, 0):
-            mark_sent(symbol, "CATALYST_BREAKOUT", 0, 0)
-            text = format_catalyst_alert(signal)
-            message_id = send_message(text)
-            log_telegram_message("catalyst_breakout", symbol, message_id, preview=text)
+    # -------------------------
+    # CATALYST BREAKOUT
+    # -------------------------
 
-    trendline = signal.get("trendline_break") or {}
-    if trendline.get("break_confirmed"):
-        if not already_sent(symbol, "TRENDLINE_BREAK", 0, 0):
-            mark_sent(symbol, "TRENDLINE_BREAK", 0, 0)
-            text = format_trendline_alert(signal)
-            message_id = send_message(text)
-            log_telegram_message("trendline_break", symbol, message_id, preview=text)
+    catalyst = (
+        signal.get(
+            "catalyst_breakout"
+        )
+        or {}
+    )
+
+    if catalyst.get(
+        "match"
+    ):
+
+        if not already_sent(
+            symbol,
+            "CATALYST_BREAKOUT",
+            0,
+            0
+        ):
+
+            mark_sent(
+                symbol,
+                "CATALYST_BREAKOUT",
+                0,
+                0
+            )
+
+            text = format_catalyst_alert(
+                signal
+            )
+
+            message_id = send_message(
+                text
+            )
+
+            log_telegram_message(
+                "catalyst_breakout",
+                symbol,
+                message_id,
+                preview=text
+            )
+
+    # -------------------------
+    # TRENDLINE BREAK
+    # -------------------------
+
+    trendline = (
+        signal.get(
+            "trendline_break"
+        )
+        or {}
+    )
+
+    if trendline.get(
+        "break_confirmed"
+    ):
+
+        if not already_sent(
+            symbol,
+            "TRENDLINE_BREAK",
+            0,
+            0
+        ):
+
+            mark_sent(
+                symbol,
+                "TRENDLINE_BREAK",
+                0,
+                0
+            )
+
+            text = format_trendline_alert(
+                signal
+            )
+
+            message_id = send_message(
+                text
+            )
+
+            log_telegram_message(
+                "trendline_break",
+                symbol,
+                message_id,
+                preview=text
+            )
+
+    # -------------------------
+    # PRE-BREAKOUT COILING
+    # -------------------------
+
+    coiling = (
+        signal.get(
+            "coiling_setup"
+        )
+        or {}
+    )
+
+    if coiling.get(
+        "match"
+    ):
+
+        if not already_sent(
+            symbol,
+            "PRE_BREAKOUT_COILING",
+            0,
+            0
+        ):
+
+            mark_sent(
+                symbol,
+                "PRE_BREAKOUT_COILING",
+                0,
+                0
+            )
+
+            text = format_coiling_alert(
+                signal
+            )
+
+            message_id = send_message(
+                text
+            )
+
+            log_telegram_message(
+                "pre_breakout_coiling",
+                symbol,
+                message_id,
+                preview=text
+            )
 
 
 def process_confluence_signal(signal, formatter):
