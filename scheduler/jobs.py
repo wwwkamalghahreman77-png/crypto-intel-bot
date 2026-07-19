@@ -1518,7 +1518,7 @@ def job_monitor_active_signals():
 
             )
 
-            _save_closed_trade(
+                        _save_closed_trade(
 
                 row,
 
@@ -1529,7 +1529,9 @@ def job_monitor_active_signals():
                 highest_tp_hit=final_label
 
             )
-            def job_daily_metals_report():
+
+
+def job_daily_metals_report():
 
     print(
         "[Job] شروع تحلیل روزانه طلا"
@@ -1591,6 +1593,7 @@ def job_monitor_active_signals():
 
     # تحلیل روزانه صرف نظر از SIGNAL/REJECT
     # همیشه ارسال می‌شود؛ چون گزارش است نه سیگنال معاملاتی
+
     text = format_metal_report(
         signal
     )
