@@ -12,6 +12,7 @@ from telegram_bot.formatters import (
     format_spot_signal,
     format_catalyst_alert,
     format_trendline_alert,
+    format_coiling_alert,
 )
 
 from analysis.technical import analyze_technical
