@@ -1,3 +1,7 @@
+"""
+main.py
+"""
+
 import sys
 
 from scheduler.jobs import (
@@ -10,18 +14,26 @@ from scheduler.jobs import (
 
 
 def run_scans():
+
     job_market_scan()
+
     job_futures_scan()
+
     job_spot_scan()
 
 
 def main():
 
-    mode = sys.argv[1] if len(sys.argv) > 1 else "all"
+    mode = (
+        sys.argv[1]
+        if len(sys.argv) > 1
+        else "all"
+    )
 
     if mode == "all":
 
         job_monitor_active_signals()
+
         run_scans()
 
     elif mode == "market":
@@ -47,7 +59,8 @@ def main():
     else:
 
         print(
-            "حالت ناشناخته"
+            "حالت ناشناخته:",
+            mode
         )
 
 
