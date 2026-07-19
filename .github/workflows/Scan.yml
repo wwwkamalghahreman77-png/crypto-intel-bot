@@ -37,6 +37,7 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
           TOOBIT_ACCESS_KEY: ${{ secrets.TOOBIT_ACCESS_KEY }}
           TOOBIT_SECRET_KEY: ${{ secrets.TOOBIT_SECRET_KEY }}
         run: |
