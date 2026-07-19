@@ -1,10 +1,12 @@
 """
-scheduler/jobs.py
+وظایف اصلی ربات
 """
 
+from dex.gem_scanner import run_full_scan
 from telegram_bot.bot import send_message
-
 from telegram_bot.formatters import (
+    format_dex_discovery,
+    format_crypto_report,
     format_market_signal_v2,
     format_futures_signal,
     format_spot_signal,
@@ -13,113 +15,50 @@ from telegram_bot.formatters import (
     format_coiling_alert,
 )
 
-from database.db import db, now_str
-from database.signal_history import already_sent, mark_sent
+from analysis.technical import analyze_technical
+from analysis.fundamental import analyze_fundamental
+from analysis.scoring import calculate_total_score, classify_status
+
+from news.news_fetcher import analyze_news_for_token, fetch_all_news
 
 from config.settings import settings
+from database.db import db, now_str
+from database.models import CryptoReport
+
+from database.signal_history import already_sent, mark_sent
 
 
 MIN_SIGNAL_SCORE = 55
 
 
-def save_active_signal(
-    signal,
-    message_id=None
-):
+def save_active_signal(signal, message_id=None):
 
-    levels = (
-        signal.get(
-            "trade_levels",
-            {}
-        )
-    )
+    levels = signal.get("trade_levels", {})
 
     data = {
-
-        "symbol":
-            signal.get(
-                "symbol"
-            ),
-
-        "signal_type":
-            signal.get(
-                "direction",
-                "LONG"
-            ),
-
-        "entry_price":
-            levels.get(
-                "entry",
-                0
-            ),
-
-        "tp1":
-            levels.get(
-                "tp1",
-                0
-            ),
-
-        "tp2":
-            levels.get(
-                "tp2",
-                0
-            ),
-
-        "tp3":
-            levels.get(
-                "tp3",
-                0
-            ),
-
-        "tp4":
-            levels.get(
-                "tp4",
-                0
-            ),
-
-        "stop_loss":
-            levels.get(
-                "stop_loss",
-                0
-            ),
-
-        "telegram_chat_id":
-            settings.telegram_chat_id,
-
-        "telegram_message_id":
-            message_id,
-
-        "status":
-            "active",
-
-        "hit_tp1":
-            0,
-
-        "hit_tp2":
-            0,
-
-        "hit_tp3":
-            0,
-
-        "hit_tp4":
-            0,
-
-        "hit_stop":
-            0,
-
-        "date_found":
-            now_str(),
+        "symbol": signal.get("symbol"),
+        "signal_type": signal.get("type", "LONG"),
+        "entry_price": levels.get("entry", 0),
+        "tp1": levels.get("tp1", 0),
+        "tp2": levels.get("tp2", 0),
+        "tp3": levels.get("tp3", 0),
+        "tp4": levels.get("tp4", 0),
+        "stop_loss": levels.get("stop_loss", 0),
+        "telegram_chat_id": settings.telegram_chat_id,
+        "telegram_message_id": message_id,
+        "status": "active",
+        "hit_tp1": 0,
+        "hit_tp2": 0,
+        "hit_tp3": 0,
+        "hit_tp4": 0,
+        "hit_stop": 0,
+        "date_found": now_str()
     }
 
-    db.insert(
-        "active_signals",
-        data
-    )
+    db.insert("active_signals", data)
 
 
-def active_signal_exists(
-    symbol
-):
+def active_signal_exists(symbol):
 
     try:
 
@@ -131,17 +70,9 @@ def active_signal_exists(
         for row in rows:
 
             if (
-                row.get(
-                    "symbol"
-                )
-                == symbol
-                and
-                row.get(
-                    "status"
-                )
-                == "active"
+                row.get("symbol") == symbol
+                and row.get("status") == "active"
             ):
-
                 return True
 
     except Exception as e:
@@ -167,124 +98,155 @@ def log_telegram_message(
         db.insert(
             "telegram_messages",
             {
-
-                "message_type":
-                    message_type,
-
-                "symbol":
-                    symbol,
-
-                "telegram_chat_id":
-                    settings.telegram_chat_id,
-
-                "telegram_message_id":
-                    message_id,
-
-                "reply_to_message_id":
-                    reply_to,
-
-                "content_preview":
-                    preview[:200],
-
-                "date_sent":
-                    now_str(),
+                "message_type": message_type,
+                "symbol": symbol,
+                "telegram_chat_id": settings.telegram_chat_id,
+                "telegram_message_id": message_id,
+                "reply_to_message_id": reply_to,
+                "content_preview": preview[:200],
+                "date_sent": now_str(),
             }
         )
 
     except Exception as e:
 
         print(
-            "[TelegramMessages]",
+            "[TelegramMessages] خطا در ثبت پیام:",
             e
         )
 
 
-def check_special_alerts(
-    signal
-):
+def check_catalyst_and_trendline_alerts(signal):
 
     symbol = signal.get(
         "symbol"
     )
 
-    alerts = [
-
-        (
-            "catalyst_breakout",
-            "CATALYST_BREAKOUT",
-            format_catalyst_alert,
-            "catalyst_breakout",
-        ),
-
-        (
-            "trendline_break",
-            "TRENDLINE_BREAK",
-            format_trendline_alert,
-            "trendline_break",
-        ),
-
-        (
-            "coiling_setup",
-            "PRE_BREAKOUT_COILING",
-            format_coiling_alert,
-            "pre_breakout_coiling",
-        ),
-
-    ]
-
-    for key, sent_type, formatter, message_type in alerts:
-
-        alert = (
-            signal.get(
-                key
-            )
-            or {}
+    catalyst = (
+        signal.get(
+            "catalyst_breakout"
         )
+        or {}
+    )
 
-        confirmed = (
-            alert.get(
-                "match"
-            )
-            or
-            alert.get(
-                "break_confirmed"
-            )
+    trendline = (
+        signal.get(
+            "trendline_break"
         )
+        or {}
+    )
 
-        if not confirmed:
+    coiling = (
+        signal.get(
+            "coiling_setup"
+        )
+        or {}
+    )
 
-            continue
+    if catalyst.get(
+        "match"
+    ):
 
-        if already_sent(
+        if not already_sent(
             symbol,
-            sent_type,
+            "CATALYST_BREAKOUT",
             0,
             0
         ):
 
-            continue
+            mark_sent(
+                symbol,
+                "CATALYST_BREAKOUT",
+                0,
+                0
+            )
 
-        mark_sent(
+            text = format_catalyst_alert(
+                signal
+            )
+
+            message_id = send_message(
+                text
+            )
+
+            log_telegram_message(
+                "catalyst_breakout",
+                symbol,
+                message_id,
+                preview=text
+            )
+
+        return
+
+    if trendline.get(
+        "break_confirmed"
+    ):
+
+        if not already_sent(
             symbol,
-            sent_type,
+            "TRENDLINE_BREAK",
             0,
             0
-        )
+        ):
 
-        text = formatter(
-            signal
-        )
+            mark_sent(
+                symbol,
+                "TRENDLINE_BREAK",
+                0,
+                0
+            )
 
-        message_id = send_message(
-            text
-        )
+            text = format_trendline_alert(
+                signal
+            )
 
-        log_telegram_message(
-            message_type,
+            message_id = send_message(
+                text
+            )
+
+            log_telegram_message(
+                "trendline_break",
+                symbol,
+                message_id,
+                preview=text
+            )
+
+        return
+
+    if coiling.get(
+        "match"
+    ):
+
+        if not already_sent(
             symbol,
-            message_id,
-            preview=text
-        )
+            "PRE_BREAKOUT_COILING",
+            0,
+            0
+        ):
+
+            mark_sent(
+                symbol,
+                "PRE_BREAKOUT_COILING",
+                0,
+                0
+            )
+
+            text = format_coiling_alert(
+                signal
+            )
+
+            message_id = send_message(
+                text
+            )
+
+            log_telegram_message(
+                "pre_breakout_coiling",
+                symbol,
+                message_id,
+                preview=text
+            )
+
+        return
 
 
 def process_confluence_signal(
@@ -296,154 +258,85 @@ def process_confluence_signal(
         "symbol"
     )
 
-    check_special_alerts(
+    decision = signal.get(
+        "decision"
+    )
+
+    check_catalyst_and_trendline_alerts(
         signal
     )
 
-    if (
-        signal.get(
-            "decision"
-        )
-        != "SIGNAL"
-    ):
+    if decision == "SIGNAL":
 
-        return
+        if active_signal_exists(
+            symbol
+        ):
+            return
 
-    if active_signal_exists(
-        symbol
-    ):
+        if already_sent(
+            symbol,
+            signal.get(
+                "structure_signal"
+            )
+            or signal.get(
+                "direction",
+                "UNKNOWN"
+            ),
+            signal.get(
+                "score",
+                0
+            ),
+            signal.get(
+                "score",
+                0
+            )
+        ):
+            return
 
-        return
-
-    signal_type = (
-        signal.get(
-            "structure_signal"
-        )
-        or
-        signal.get(
-            "direction",
-            "UNKNOWN"
-        )
-    )
-
-    score = signal.get(
-        "score",
-        0
-    )
-
-    if already_sent(
-        symbol,
-        signal_type,
-        score,
-        score
-    ):
-
-        return
-
-    mark_sent(
-        symbol,
-        signal_type,
-        score,
-        score
-    )
-
-    text = formatter(
-        signal
-    )
-
-    message_id = send_message(
-        text
-    )
-
-    log_telegram_message(
-        "signal",
-        symbol,
-        message_id,
-        preview=text
-    )
-
-    save_active_signal(
-        signal,
-        message_id
-    )
-
-
-def job_market_scan():
-
-    print(
-        "[Job] شروع Toobit Market Scanner"
-    )
-
-    from market_scanner.signal_detector import (
-        scan_for_signals
-    )
-
-    signals = scan_for_signals()
-
-    for signal in signals:
-
-        process_confluence_signal(
-            signal,
-            format_market_signal_v2
+        mark_sent(
+            symbol,
+            signal.get(
+                "structure_signal"
+            )
+            or signal.get(
+                "direction",
+                "UNKNOWN"
+            ),
+            signal.get(
+                "score",
+                0
+            ),
+            signal.get(
+                "score",
+                0
+            )
         )
 
-    print(
-        "[Job] پایان Market Scanner -",
-        len(signals),
-        "مورد"
-    )
-
-
-def job_futures_scan():
-
-    print(
-        "[Job] شروع Toobit Futures Scanner"
-    )
-
-    from futures.futures_scanner import (
-        scan_futures
-    )
-
-    signals = scan_futures()
-
-    for signal in signals:
-
-        process_confluence_signal(
-            signal,
-            format_futures_signal
+        text = formatter(
+            signal
         )
 
-    print(
-        "[Job] پایان Futures Scanner -",
-        len(signals),
-        "مورد"
-    )
-
-
-def job_spot_scan():
-
-    print(
-        "[Job] شروع Toobit Spot Scanner"
-    )
-
-    from spot.spot_scanner import (
-        scan_spot
-    )
-
-    signals = scan_spot()
-
-    for signal in signals:
-
-        process_confluence_signal(
-            signal,
-            format_spot_signal
+        message_id = send_message(
+            text
         )
 
-    print(
-        "[Job] پایان Spot Scanner -",
-        len(signals),
-        "مورد"
-    )
+        log_telegram_message(
+            "signal",
+            symbol,
+            message_id,
+            preview=text
+        )
+
+        save_active_signal(
+            {
+                **signal,
+                "type": signal.get(
+                    "direction",
+                    "LONG"
+                )
+            },
+            message_id
+        )
 
 
 def job_send_performance_report():
@@ -472,6 +365,323 @@ def job_send_performance_report():
     )
 
 
+def job_dex_scan():
+
+    print(
+        "[Job] شروع DEX Gem Scan ..."
+    )
+
+    discoveries = run_full_scan()
+
+    for d in discoveries:
+
+        send_message(
+            format_dex_discovery(
+                d
+            )
+        )
+
+    print(
+        f"[Job] پایان اسکن - {len(discoveries)} مورد"
+    )
+
+    return discoveries
+
+
+def analyze_project(
+    coin_id,
+    token_symbol,
+    market="N/A"
+):
+
+    print(
+        f"[Job] تحلیل پروژه: {token_symbol}"
+    )
+
+    fundamental = analyze_fundamental(
+        coin_id
+    )
+
+    technical = analyze_technical(
+        coin_id
+    )
+
+    news_data = fetch_all_news()
+
+    news = analyze_news_for_token(
+        token_symbol,
+        coin_id,
+        news_data
+    )
+
+    scores = {
+
+        "security": (
+            70
+            if fundamental.get(
+                "available"
+            )
+            else 30
+        ),
+
+        "fundamental": fundamental.get(
+            "score",
+            0
+        ),
+
+        "news": news.get(
+            "score",
+            0
+        ),
+
+        "technical": technical.get(
+            "score",
+            0
+        ),
+
+        "community": 0,
+
+        "liquidity": 50,
+
+        "narrative": 50
+
+    }
+
+    total = calculate_total_score(
+        scores
+    )
+
+    status = classify_status(
+        total
+    )
+
+    report = CryptoReport(
+
+        token=token_symbol.upper(),
+
+        date_found=now_str(),
+
+        total_score=total,
+
+        security=scores[
+            "security"
+        ],
+
+        fundamental=scores[
+            "fundamental"
+        ],
+
+        news=scores[
+            "news"
+        ],
+
+        technical=scores[
+            "technical"
+        ],
+
+        community=scores[
+            "community"
+        ],
+
+        status=status
+
+    )
+
+    db.insert(
+        "crypto_reports",
+        report.to_dict()
+    )
+
+    result = report.to_dict()
+
+    result[
+        "market"
+    ] = market
+
+    result[
+        "reasons"
+    ] = (
+        fundamental.get(
+            "reasons",
+            []
+        )
+        +
+        news.get(
+            "reasons",
+            []
+        )
+    )
+
+    result[
+        "risks"
+    ] = (
+        fundamental.get(
+            "risks",
+            []
+        )
+        +
+        news.get(
+            "risks",
+            []
+        )
+    )
+
+    return result
+
+
+def job_market_scan():
+
+    print(
+        "[Job] شروع Market Scanner"
+    )
+
+    from market_scanner.signal_detector import (
+        scan_for_signals
+    )
+
+    signals = scan_for_signals()
+
+    for signal in signals:
+
+        if "decision" in signal:
+
+            process_confluence_signal(
+                signal,
+                format_market_signal_v2
+            )
+
+            continue
+
+        symbol = signal.get(
+            "symbol"
+        )
+
+        if signal.get(
+            "score",
+            0
+        ) < MIN_SIGNAL_SCORE:
+
+            continue
+
+        if active_signal_exists(
+            symbol
+        ):
+
+            continue
+
+        if already_sent(
+            symbol,
+            signal.get(
+                "structure_signal"
+            )
+            or signal.get(
+                "type",
+                "UNKNOWN"
+            ),
+            signal.get(
+                "score",
+                0
+            ),
+            signal.get(
+                "score",
+                0
+            )
+        ):
+
+            continue
+
+        mark_sent(
+            symbol,
+            signal.get(
+                "structure_signal"
+            )
+            or signal.get(
+                "type",
+                "UNKNOWN"
+            ),
+            signal.get(
+                "score",
+                0
+            ),
+            signal.get(
+                "score",
+                0
+            )
+        )
+
+        text = format_market_signal_v2(
+            signal
+        )
+
+        message_id = send_message(
+            text
+        )
+
+        log_telegram_message(
+            "signal",
+            symbol,
+            message_id,
+            preview=text
+        )
+
+        save_active_signal(
+            signal,
+            message_id
+        )
+
+    print(
+        f"[Job] پایان Market Scanner - {len(signals)} مورد"
+    )
+
+
+def job_futures_scan():
+
+    print(
+        "[Job] شروع Futures Scanner"
+    )
+
+    from futures.futures_scanner import (
+        scan_futures
+    )
+
+    signals = scan_futures()
+
+    for signal in signals:
+
+        process_confluence_signal(
+            signal,
+            format_futures_signal
+        )
+
+    print(
+        f"[Job] پایان Futures Scanner - {len(signals)} مورد"
+    )
+
+
+def job_spot_scan():
+
+    print(
+        "[Job] شروع Spot Scanner"
+    )
+
+    from spot.spot_scanner import (
+        scan_spot
+    )
+
+    signals = scan_spot()
+
+    for signal in signals:
+
+        process_confluence_signal(
+            signal,
+            format_spot_signal
+        )
+
+    print(
+        f"[Job] پایان Spot Scanner - {len(signals)} مورد"
+    )
+
+
 def _calc_profit_pct(
     signal_type,
     entry,
@@ -486,23 +696,165 @@ def _calc_profit_pct(
 
         return round(
             (
-                hit_price - entry
+                hit_price
+                - entry
             )
-            /
-            entry
+            / entry
             * 100,
             2
         )
 
     return round(
         (
-            entry - hit_price
+            entry
+            - hit_price
         )
-        /
-        entry
+        / entry
         * 100,
         2
     )
+
+
+def _parse_dt(
+    date_str
+):
+
+    from datetime import datetime
+
+    try:
+
+        return datetime.strptime(
+            date_str,
+            "%Y-%m-%d %H:%M:%S"
+        )
+
+    except Exception:
+
+        return None
+
+
+def _save_closed_trade(
+    row,
+    exit_price,
+    close_reason,
+    highest_tp_hit=None
+):
+
+    from datetime import datetime
+
+    from database.models import (
+        ClosedTrade
+    )
+
+    entry = row.get(
+        "entry_price",
+        0
+    )
+
+    signal_type = row.get(
+        "signal_type",
+        "LONG"
+    )
+
+    stop_loss = row.get(
+        "stop_loss",
+        0
+    )
+
+    pct = _calc_profit_pct(
+        signal_type,
+        entry,
+        exit_price
+    )
+
+    risk = abs(
+        entry
+        - stop_loss
+    ) if stop_loss else 0
+
+    reward = abs(
+        exit_price
+        - entry
+    )
+
+    rr = (
+        round(
+            reward / risk,
+            2
+        )
+        if risk > 0
+        else None
+    )
+
+    opened_dt = _parse_dt(
+        row.get(
+            "date_found",
+            ""
+        )
+    )
+
+    duration_hours = None
+
+    if opened_dt:
+
+        duration_hours = round(
+            (
+                datetime.utcnow()
+                - opened_dt
+            ).total_seconds()
+            / 3600,
+            2
+        )
+
+    trade = ClosedTrade(
+
+        symbol=row.get(
+            "symbol"
+        ),
+
+        signal_type=signal_type,
+
+        entry_price=entry,
+
+        exit_price=exit_price,
+
+        stop_loss=stop_loss,
+
+        highest_tp_hit=highest_tp_hit,
+
+        result_pct=pct,
+
+        risk_reward=rr,
+
+        close_reason=close_reason,
+
+        date_opened=row.get(
+            "date_found",
+            ""
+        ),
+
+        date_closed=now_str(),
+
+        duration_hours=(
+            duration_hours
+            or 0
+        ),
+
+    )
+
+    try:
+
+        db.insert(
+            "closed_trades",
+            trade.to_dict()
+        )
+
+    except Exception as e:
+
+        print(
+            "[ClosedTrades] خطا در ثبت معامله بسته‌شده:",
+            e
+        )
 
 
 def job_monitor_active_signals():
@@ -550,6 +902,18 @@ def job_monitor_active_signals():
 
             continue
 
+        chat_id = row.get(
+            "telegram_chat_id"
+        )
+
+        msg_id = row.get(
+            "telegram_message_id"
+        )
+
+        row_id = row.get(
+            "id"
+        )
+
         stop_loss = row.get(
             "stop_loss",
             0
@@ -570,13 +934,11 @@ def job_monitor_active_signals():
                 and stop_loss
                 and price >= stop_loss
             )
+
         )
 
-        if (
-            stop_hit
-            and not row.get(
-                "hit_stop"
-            )
+        if stop_hit and not row.get(
+            "hit_stop"
         ):
 
             pct = _calc_profit_pct(
@@ -590,28 +952,33 @@ def job_monitor_active_signals():
                 f"نتیجه: {pct}%"
             )
 
-            send_message(
+            new_msg_id = send_message(
                 text,
-                chat_id=row.get(
-                    "telegram_chat_id"
-                ),
-                reply_to_message_id=row.get(
-                    "telegram_message_id"
-                )
+                chat_id=chat_id,
+                reply_to_message_id=msg_id
+            )
+
+            log_telegram_message(
+                "stop_hit",
+                symbol,
+                new_msg_id,
+                reply_to=msg_id,
+                preview=text
             )
 
             db.update(
                 "active_signals",
-                row.get(
-                    "id"
-                ),
+                row_id,
                 {
-                    "status":
-                        "closed",
-
-                    "hit_stop":
-                        1,
+                    "status": "closed",
+                    "hit_stop": 1
                 }
+            )
+
+            _save_closed_trade(
+                row,
+                price,
+                close_reason="STOP_LOSS"
             )
 
             continue
@@ -644,7 +1011,19 @@ def job_monitor_active_signals():
 
         ]
 
-        final_hit = False
+        highest_target_key = None
+
+        for tp_key, hit_key, _ in targets:
+
+            if row.get(
+                tp_key
+            ):
+
+                highest_target_key = tp_key
+
+        final_hit_now = False
+
+        final_label = None
 
         for tp_key, hit_key, label in targets:
 
@@ -653,11 +1032,8 @@ def job_monitor_active_signals():
                 0
             )
 
-            if (
-                not tp_value
-                or row.get(
-                    hit_key
-                )
+            if not tp_value or row.get(
+                hit_key
             ):
 
                 continue
@@ -675,57 +1051,63 @@ def job_monitor_active_signals():
                     signal_type == "SHORT"
                     and price <= tp_value
                 )
+
             )
 
-            if not hit:
+            if hit:
 
-                continue
-
-            pct = _calc_profit_pct(
-                signal_type,
-                entry,
-                price
-            )
-
-            text = (
-                f"✅ {label} برای {symbol} خورد!\n"
-                f"سود: {pct}%"
-            )
-
-            send_message(
-                text,
-                chat_id=row.get(
-                    "telegram_chat_id"
-                ),
-                reply_to_message_id=row.get(
-                    "telegram_message_id"
+                pct = _calc_profit_pct(
+                    signal_type,
+                    entry,
+                    price
                 )
-            )
+
+                text = (
+                    f"✅ {label} برای {symbol} خورد!\n"
+                    f"سود: {pct}%"
+                )
+
+                new_msg_id = send_message(
+                    text,
+                    chat_id=chat_id,
+                    reply_to_message_id=msg_id
+                )
+
+                log_telegram_message(
+                    "tp_hit",
+                    symbol,
+                    new_msg_id,
+                    reply_to=msg_id,
+                    preview=text
+                )
+
+                db.update(
+                    "active_signals",
+                    row_id,
+                    {
+                        hit_key: 1
+                    }
+                )
+
+                if tp_key == highest_target_key:
+
+                    final_hit_now = True
+
+                    final_label = tp_key
+
+        if final_hit_now:
 
             db.update(
                 "active_signals",
-                row.get(
-                    "id"
-                ),
+                row_id,
                 {
-                    hit_key:
-                        1
+                    "status": "closed"
                 }
             )
 
-            if tp_key == "tp4":
-
-                final_hit = True
-
-        if final_hit:
-
-            db.update(
-                "active_signals",
-                row.get(
-                    "id"
-                ),
-                {
-                    "status":
-                        "closed"
-                }
+            _save_closed_trade(
+                row,
+                price,
+                close_reason="ALL_TARGETS_HIT",
+                highest_tp_hit=final_label
             )
