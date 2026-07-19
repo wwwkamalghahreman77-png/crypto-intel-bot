@@ -1,3 +1,9 @@
+"""
+analysis/scoring.py
+
+سیستم امتیازدهی نهایی پروژه‌ها و سیگنال‌ها
+"""
+
 WEIGHTS = {
     "security": 0.25,
     "fundamental": 0.20,
@@ -36,7 +42,13 @@ def calculate_total_score(scores: dict) -> float:
         )
 
     return round(
-        total,
+        max(
+            0,
+            min(
+                100,
+                total
+            )
+        ),
         1
     )
 
@@ -47,12 +59,20 @@ def classify_status(
 
     if total_score >= 85:
 
-        return "STRONG PROJECT"
+        return (
+            "STRONG PROJECT"
+        )
 
     elif total_score >= 70:
 
-        return "WATCHLIST"
+        return (
+            "WATCHLIST"
+        )
 
-    else:
+    elif total_score >= 55:
 
-        return "REJECT"
+        return (
+            "SPECULATIVE"
+        )
+
+    return "REJECT"
