@@ -277,3 +277,82 @@ def format_trendline_alert(signal: dict) -> str:
 
 ℹ️ این یک هشدار اطلاعاتی است؛ اهمیتش کمتر از هشدار الگوی کاتالیزوری بالاست.
 """
+
+def format_coiling_alert(signal: dict) -> str:
+    """
+    هشدار Pre-Breakout / Coiling.
+    مستقل از SIGNAL و REJECT.
+    """
+
+    symbol = clean_symbol(
+        signal.get(
+            "symbol",
+            ""
+        )
+    )
+
+    coiling = (
+        signal.get(
+            "coiling_setup"
+        )
+        or {}
+    )
+
+    current_price = signal.get(
+        "current_price",
+        "—"
+    )
+
+    reasons = coiling.get(
+        "reasons",
+        []
+    )
+
+    reasons_text = "\n".join(
+        f"• {reason}"
+        for reason in reasons
+    )
+
+    if not reasons_text:
+        reasons_text = "—"
+
+    return f"""
+⚡ PRE-BREAKOUT SETUP
+
+🔍 احتمال آماده‌شدن برای حرکت بزرگ
+
+🪙 نماد
+{symbol}
+
+💰 قیمت فعلی
+{current_price}
+
+📊 امتیاز فشردگی
+{coiling.get('score', '—')}/100
+
+📉 فشردگی نوسان
+{"✅ تایید شد" if coiling.get("volatility_compression") else "❌ تایید نشد"}
+
+🔻 فشردگی Bollinger Bands
+{"✅ تایید شد" if coiling.get("bollinger_squeeze") else "❌ تایید نشد"}
+
+📈 روند حجم
+{"✅ افزایش تدریجی" if coiling.get("volume_accumulation") else "❌ تایید نشد"}
+
+🐋 OBV
+{"✅ صعودی" if coiling.get("obv_rising") else "❌ تایید نشد"}
+
+🚀 وضعیت قیمت
+{"✅ هنوز بیش از حد پامپ نکرده" if coiling.get("price_not_overextended") else "⚠️ احتمالاً حرکت شروع شده"}
+
+📏 فاصله تا مقاومت
+{coiling.get("resistance_distance", "—")}%
+
+🧠 دلایل
+
+{reasons_text}
+
+⚠️ این سیگنال خرید قطعی نیست.
+این هشدار فقط نشان می‌دهد ارز ممکن است در مرحله فشردگی و آماده‌شدن برای شکست قرار داشته باشد.
+"""
+
