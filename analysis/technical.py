@@ -369,3 +369,21 @@ def analyze_technical(
                     100,
                     score
                 ),
+                1
+            )
+
+        }
+
+    except Exception as e:
+
+        print(
+            f"[Technical] "
+            f"خطا در تحلیل تکنیکال "
+            f"{coin_id}: {e}"
+        )
+
+        return {
+            "available": False,
+            "reason": str(e),
+            "score": 0
+        }
