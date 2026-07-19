@@ -10,10 +10,9 @@ from telegram_bot.formatters import (
     format_market_signal_v2,
     format_futures_signal,
     format_spot_signal,
-    format_watchlist_signal,
+    format_catalyst_alert,
+    format_trendline_alert,
 )
-
-from database.models import WatchlistItem
 
 from analysis.technical import analyze_technical
 from analysis.fundamental import analyze_fundamental
@@ -111,60 +110,48 @@ def log_telegram_message(message_type, symbol, message_id, reply_to=None, previe
         print("[TelegramMessages] خطا در ثبت پیام:", e)
 
 
-def watching_entry_exists(symbol):
+def check_catalyst_and_trendline_alerts(signal):
+    """
+    بررسی مستقل از decision کانفلوئنس: الگوی کاتالیزوری شبیه AKE/BANK و شکست خط
+    روند بلندمدت. چون این حرکت‌ها معمولاً سریع‌تر از رسیدن به آستانه‌ی SIGNAL
+    کامل اتفاق می‌افتن، این هشدارها حتی برای سیگنال‌های REJECT هم بررسی و
+    (در صورت تطبیق) ارسال می‌شوند. هر کدام فقط یک‌بار برای هر نماد ارسال می‌شود.
+    """
 
-    try:
-        rows = db.fetch_by_field("watchlist", "symbol", symbol)
-        return any(r.get("status") == "watching" for r in rows)
-    except Exception as e:
-        print("[Watchlist Check]", e)
-        return False
+    symbol = signal.get("symbol")
 
+    catalyst = signal.get("catalyst_breakout") or {}
+    if catalyst.get("match"):
+        if not already_sent(symbol, "CATALYST_BREAKOUT", 0, 0):
+            mark_sent(symbol, "CATALYST_BREAKOUT", 0, 0)
+            text = format_catalyst_alert(signal)
+            message_id = send_message(text)
+            log_telegram_message("catalyst_breakout", symbol, message_id, preview=text)
 
-def close_watchlist_entries(symbol, new_status="triggered"):
-
-    try:
-        rows = db.fetch_by_field("watchlist", "symbol", symbol)
-        for row in rows:
-            if row.get("status") == "watching":
-                db.update("watchlist", row["id"], {"status": new_status})
-    except Exception as e:
-        print("[Watchlist Close]", e)
-
-
-def save_watchlist_item(signal, message_id=None):
-
-    levels = signal.get("trade_levels") or {}
-
-    item = WatchlistItem(
-        symbol=signal.get("symbol"),
-        direction=signal.get("direction", "LONG"),
-        trigger_price=levels.get("entry", 0),
-        invalidation_price=levels.get("stop_loss", 0),
-        suggested_entry=levels.get("entry", 0),
-        score=signal.get("score", 0),
-        reason="، ".join((signal.get("reasons") or [])[:2]),
-        telegram_chat_id=settings.telegram_chat_id,
-        telegram_message_id=message_id or 0,
-        status="watching",
-        date_found=now_str(),
-    )
-
-    db.insert("watchlist", item.to_dict())
+    trendline = signal.get("trendline_break") or {}
+    if trendline.get("break_confirmed"):
+        if not already_sent(symbol, "TRENDLINE_BREAK", 0, 0):
+            mark_sent(symbol, "TRENDLINE_BREAK", 0, 0)
+            text = format_trendline_alert(signal)
+            message_id = send_message(text)
+            log_telegram_message("trendline_break", symbol, message_id, preview=text)
 
 
 def process_confluence_signal(signal, formatter):
     """
     مسیریابی یک سیگنال خروجی از موتور کانفلوئنس بر اساس decision:
         SIGNAL      → پیام کامل معاملاتی + ثبت active_signals
-        WATCHLIST   → پیام واچ‌لیست + ثبت watchlist (بدون تکرار)
         REJECT      → قبلا در اسکنر فیلتر شده، اینجا نباید برسد
 
     formatter: format_futures_signal یا format_spot_signal یا format_market_signal_v2
+
+    جدا از decision، الگوی کاتالیزوری/شکست خط روند هم همیشه بررسی می‌شود.
     """
 
     symbol = signal.get("symbol")
     decision = signal.get("decision")
+
+    check_catalyst_and_trendline_alerts(signal)
 
     if decision == "SIGNAL":
 
@@ -176,24 +163,11 @@ def process_confluence_signal(signal, formatter):
 
         mark_sent(symbol, signal.get("structure_signal") or signal.get("direction", "UNKNOWN"), signal.get("score", 0), signal.get("score", 0))
 
-        close_watchlist_entries(symbol, new_status="triggered")
-
         text = formatter(signal)
         message_id = send_message(text)
         log_telegram_message("signal", symbol, message_id, preview=text)
 
         save_active_signal({**signal, "type": signal.get("direction", "LONG")}, message_id)
-
-    elif decision == "WATCHLIST":
-
-        if watching_entry_exists(symbol) or active_signal_exists(symbol):
-            return
-
-        text = format_watchlist_signal(signal)
-        message_id = send_message(text)
-        log_telegram_message("watchlist", symbol, message_id, preview=text)
-
-        save_watchlist_item(signal, message_id)
 
 
 def job_send_performance_report():
