@@ -1,4 +1,8 @@
-# analysis/technical.py
+"""
+analysis/technical.py
+
+تحلیل تکنیکال پایه با داده‌های CoinGecko.
+"""
 
 import requests
 import pandas as pd
@@ -21,7 +25,8 @@ def fetch_market_chart(
 
     url = (
         f"{COINGECKO_BASE}"
-        f"/coins/{coin_id}/market_chart"
+        f"/coins/{coin_id}"
+        f"/market_chart"
     )
 
     try:
@@ -50,6 +55,7 @@ def fetch_market_chart(
         )
 
         if not prices:
+
             return None
 
         df = pd.DataFrame(
@@ -60,24 +66,46 @@ def fetch_market_chart(
             ]
         )
 
-        vol_df = pd.DataFrame(
-            volumes,
-            columns=[
-                "timestamp",
-                "volume"
-            ]
-        )
+        if volumes:
 
-        if len(vol_df) != len(df):
-
-            df["volume"] = 0.0
-
-        else:
+            vol_df = pd.DataFrame(
+                volumes,
+                columns=[
+                    "timestamp",
+                    "volume"
+                ]
+            )
 
             df["volume"] = (
                 vol_df["volume"]
+                .reindex(
+                    range(
+                        len(df)
+                    )
+                )
+                .fillna(0)
                 .values
             )
+
+        else:
+
+            df["volume"] = 0.0
+
+        df["price"] = pd.to_numeric(
+            df["price"],
+            errors="coerce"
+        )
+
+        df["volume"] = pd.to_numeric(
+            df["volume"],
+            errors="coerce"
+        )
+
+        df = df.dropna(
+            subset=[
+                "price"
+            ]
+        )
 
         return df
 
@@ -86,7 +114,17 @@ def fetch_market_chart(
         print(
             f"[Technical] "
             f"خطا در دریافت داده قیمتی "
-            f"برای {coin_id}: {e}"
+            f"{coin_id}: {e}"
+        )
+
+        return None
+
+    except Exception as e:
+
+        print(
+            f"[Technical] "
+            f"خطای پردازش داده "
+            f"{coin_id}: {e}"
         )
 
         return None
@@ -109,23 +147,25 @@ def analyze_technical(
         return {
             "available": False,
             "reason":
-                "داده قیمتی کافی "
-                "برای تحلیل تکنیکال موجود نیست",
+                "داده قیمتی کافی برای تحلیل تکنیکال موجود نیست",
             "score": 0
         }
 
     try:
 
-        close = df["price"]
+        close = df[
+            "price"
+        ]
 
-        rsi = (
+        rsi_series = (
             RSIIndicator(
                 close=close,
                 window=14
             )
             .rsi()
-            .iloc[-1]
         )
+
+        rsi = rsi_series.iloc[-1]
 
         macd_calc = MACD(
             close=close
@@ -164,7 +204,10 @@ def analyze_technical(
         ema100 = (
             EMAIndicator(
                 close=close,
-                window=100
+                window=min(
+                    100,
+                    len(close) - 1
+                )
             )
             .ema_indicator()
             .iloc[-1]
@@ -231,18 +274,23 @@ def analyze_technical(
         score = 0
 
         if 40 <= rsi <= 65:
+
             score += 25
 
         elif rsi < 30:
+
             score += 15
 
         if macd_line > macd_signal:
+
             score += 25
 
         if ema20 > ema50:
+
             score += 25
 
         if breakout:
+
             score += 25
 
         return {
@@ -321,19 +369,3 @@ def analyze_technical(
                     100,
                     score
                 ),
-                1
-            )
-        }
-
-    except Exception as e:
-
-        print(
-            f"[Technical] "
-            f"خطا در تحلیل {coin_id}: {e}"
-        )
-
-        return {
-            "available": False,
-            "reason": str(e),
-            "score": 0
-        }
