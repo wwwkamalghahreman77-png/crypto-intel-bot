@@ -3,16 +3,17 @@ analysis/confluence.py
 
 موتور امتیازدهی کانفلوئنس ۰ تا ۱۰۰.
 
-تصمیم:
-    >= 55 → SIGNAL
-    < 55  → REJECT
+سیگنال فقط زمانی صادر می‌شود که:
+- امتیاز کانفلوئنس به حداقل برسد
+- چند تایم‌فریم تأیید باشند
+- ساختار بازار تأیید شود
+- حرکت اصلی هنوز شروع نشده باشد
+- رشد اولیه بیشتر از ۵٪ نباشد
 
 هشدارهای مستقل:
-    - CATALYST_BREAKOUT
-    - TRENDLINE_BREAK
-    - PRE_BREAKOUT_COILING
-
-WATCHLIST معاملاتی حذف شده است.
+- فقط شکست واقعی و تأییدشده
+- فقط الگوی کاتالیزوری معتبر
+- فقط Pre-Breakout واقعی
 """
 
 import time
@@ -24,6 +25,7 @@ from analysis.indicators import (
     compute_indicators,
     score_indicator_bundle,
 )
+
 from analysis.smc import analyze_smc
 from analysis.catalyst_breakout import analyze_catalyst_breakout
 from analysis.trendline import detect_trendline_break
@@ -31,25 +33,51 @@ from analysis.trendline import detect_trendline_break
 
 MIN_SIGNAL_SCORE = 55
 
-TIMEFRAMES_MTF = ["15m", "1h", "4h", "1d", "1w"]
+MAX_INITIAL_MOVE_PCT = 5.0
+
+TIMEFRAMES_MTF = [
+    "15m",
+    "1h",
+    "4h",
+    "1d",
+    "1w",
+]
 
 
-def _is_rising(closes, min_ratio=0.55):
+def _is_rising(
+    closes,
+    min_ratio=0.55
+):
+
     if len(closes) < 5:
         return False
 
     rising = sum(
         1
-        for i in range(1, len(closes))
+        for i in range(
+            1,
+            len(closes)
+        )
         if closes[i] >= closes[i - 1]
     )
 
-    return (rising / (len(closes) - 1)) >= min_ratio
+    return (
+        rising
+        /
+        (len(closes) - 1)
+    ) >= min_ratio
 
 
-def _mtf_alignment_score(get_klines_fn, symbol, direction) -> dict:
+def _mtf_alignment_score(
+    get_klines_fn,
+    symbol,
+    direction
+):
 
-    is_long = direction == "LONG"
+    is_long = (
+        direction == "LONG"
+    )
+
     tf_results = {}
 
     for tf in TIMEFRAMES_MTF:
@@ -60,8 +88,13 @@ def _mtf_alignment_score(get_klines_fn, symbol, direction) -> dict:
             limit=25
         )
 
-        if not candles or len(candles) < 8:
+        if (
+            not candles
+            or len(candles) < 8
+        ):
+
             tf_results[tf] = None
+
             continue
 
         closes = [
@@ -69,7 +102,9 @@ def _mtf_alignment_score(get_klines_fn, symbol, direction) -> dict:
             for c in candles
         ]
 
-        rising = _is_rising(closes)
+        rising = _is_rising(
+            closes
+        )
 
         tf_results[tf] = (
             rising
@@ -77,12 +112,15 @@ def _mtf_alignment_score(get_klines_fn, symbol, direction) -> dict:
             else not rising
         )
 
-        time.sleep(0.1)
+        time.sleep(
+            0.1
+        )
 
     available = [
-        v
-        for v in tf_results.values()
-        if v is not None
+        value
+        for value
+        in tf_results.values()
+        if value is not None
     ]
 
     if len(available) < 3:
@@ -90,18 +128,24 @@ def _mtf_alignment_score(get_klines_fn, symbol, direction) -> dict:
         return {
             "score": 0,
             "reasons": [],
-            "risks": ["داده تایم‌فریم کافی نبود"],
+            "risks": [
+                "داده تایم‌فریم کافی نبود"
+            ],
             "aligned_count": 0,
             "available_count": 0,
         }
 
     aligned = sum(
         1
-        for v in available
-        if v
+        for value in available
+        if value
     )
 
-    ratio = aligned / len(available)
+    ratio = (
+        aligned
+        /
+        len(available)
+    )
 
     reasons = []
     risks = []
@@ -119,7 +163,8 @@ def _mtf_alignment_score(get_klines_fn, symbol, direction) -> dict:
         score = 12
 
         reasons.append(
-            f"روند در اکثر تایم‌فریم‌ها هم‌راستاست ({aligned}/{len(available)})"
+            f"روند در اکثر تایم‌فریم‌ها هم‌راستاست "
+            f"({aligned}/{len(available)})"
         )
 
     else:
@@ -127,7 +172,8 @@ def _mtf_alignment_score(get_klines_fn, symbol, direction) -> dict:
         score = 0
 
         risks.append(
-            f"تایم‌فریم‌ها هم‌راستا نیستند ({aligned}/{len(available)})"
+            f"تایم‌فریم‌ها هم‌راستا نیستند "
+            f"({aligned}/{len(available)})"
         )
 
     return {
@@ -139,7 +185,10 @@ def _mtf_alignment_score(get_klines_fn, symbol, direction) -> dict:
     }
 
 
-def _default_volume_bonus(signal_meta: dict, direction: str) -> dict:
+def _default_volume_bonus(
+    signal_meta: dict,
+    direction: str
+):
 
     reasons = []
     risks = []
@@ -193,10 +242,15 @@ def _default_volume_bonus(signal_meta: dict, direction: str) -> dict:
         )
 
     return {
-        "score": round(min(score, 15), 1),
+        "score": round(
+            min(score, 15),
+            1
+        ),
         "reasons": reasons,
         "risks": risks,
-        "whale_alert": volume >= 10_000_000,
+        "whale_alert": (
+            volume >= 10_000_000
+        ),
     }
 
 
@@ -214,18 +268,45 @@ def calculate_trade_levels(
             8
         )
 
-        risk = current_price - stop_loss
+        risk = (
+            current_price
+            - stop_loss
+        )
 
         if risk <= 0:
             return None
 
         return {
-            "entry": round(current_price, 8),
+            "entry": round(
+                current_price,
+                8
+            ),
+
             "stop_loss": stop_loss,
-            "tp1": round(current_price + risk * 1, 8),
-            "tp2": round(current_price + risk * 2, 8),
-            "tp3": round(current_price + risk * 3, 8),
-            "tp4": round(current_price + risk * 4, 8),
+
+            "tp1": round(
+                current_price
+                + risk * 1,
+                8
+            ),
+
+            "tp2": round(
+                current_price
+                + risk * 2,
+                8
+            ),
+
+            "tp3": round(
+                current_price
+                + risk * 3,
+                8
+            ),
+
+            "tp4": round(
+                current_price
+                + risk * 4,
+                8
+            ),
         }
 
     stop_loss = round(
@@ -233,27 +314,64 @@ def calculate_trade_levels(
         8
     )
 
-    risk = stop_loss - current_price
+    risk = (
+        stop_loss
+        - current_price
+    )
 
     if risk <= 0:
         return None
 
     return {
-        "entry": round(current_price, 8),
+        "entry": round(
+            current_price,
+            8
+        ),
+
         "stop_loss": stop_loss,
-        "tp1": round(current_price - risk * 1, 8),
-        "tp2": round(current_price - risk * 2, 8),
-        "tp3": round(current_price - risk * 3, 8),
-        "tp4": round(current_price - risk * 4, 8),
+
+        "tp1": round(
+            current_price
+            - risk * 1,
+            8
+        ),
+
+        "tp2": round(
+            current_price
+            - risk * 2,
+            8
+        ),
+
+        "tp3": round(
+            current_price
+            - risk * 3,
+            8
+        ),
+
+        "tp4": round(
+            current_price
+            - risk * 4,
+            8
+        ),
     }
 
 
-def _safe_float(value, default=0.0):
+def _safe_float(
+    value,
+    default=0.0
+):
 
     try:
-        value = float(value)
 
-        if np.isnan(value) or np.isinf(value):
+        value = float(
+            value
+        )
+
+        if (
+            np.isnan(value)
+            or np.isinf(value)
+        ):
+
             return default
 
         return value
@@ -263,22 +381,45 @@ def _safe_float(value, default=0.0):
         return default
 
 
-def analyze_coiling_setup(df: pd.DataFrame) -> dict:
+def analyze_coiling_setup(
+    df: pd.DataFrame
+):
 
     empty_result = {
+
         "match": False,
+
         "score": 0,
-        "type": "PRE_BREAKOUT_COILING",
-        "volatility_compression": False,
-        "bollinger_squeeze": False,
-        "volume_accumulation": False,
-        "obv_rising": False,
-        "price_not_overextended": False,
-        "near_resistance": False,
+
+        "type":
+            "PRE_BREAKOUT_COILING",
+
+        "volatility_compression":
+            False,
+
+        "bollinger_squeeze":
+            False,
+
+        "volume_accumulation":
+            False,
+
+        "obv_rising":
+            False,
+
+        "price_not_overextended":
+            False,
+
+        "near_resistance":
+            False,
+
         "reasons": [],
     }
 
-    if df is None or len(df) < 60:
+    if (
+        df is None
+        or len(df) < 60
+    ):
+
         return empty_result
 
     data = df.copy()
@@ -293,6 +434,7 @@ def analyze_coiling_setup(df: pd.DataFrame) -> dict:
     for column in required:
 
         if column not in data.columns:
+
             return empty_result
 
         data[column] = pd.to_numeric(
@@ -305,6 +447,7 @@ def analyze_coiling_setup(df: pd.DataFrame) -> dict:
     )
 
     if len(data) < 60:
+
         return empty_result
 
     close = data["close"]
@@ -312,16 +455,32 @@ def analyze_coiling_setup(df: pd.DataFrame) -> dict:
     low = data["low"]
     volume = data["volume"]
 
-    previous_close = close.shift(1)
+    previous_close = close.shift(
+        1
+    )
 
     tr1 = high - low
-    tr2 = (high - previous_close).abs()
-    tr3 = (low - previous_close).abs()
+
+    tr2 = (
+        high
+        - previous_close
+    ).abs()
+
+    tr3 = (
+        low
+        - previous_close
+    ).abs()
 
     true_range = pd.concat(
-        [tr1, tr2, tr3],
+        [
+            tr1,
+            tr2,
+            tr3
+        ],
         axis=1
-    ).max(axis=1)
+    ).max(
+        axis=1
+    )
 
     atr = true_range.rolling(
         14
@@ -337,7 +496,8 @@ def analyze_coiling_setup(df: pd.DataFrame) -> dict:
 
     atr_compression = (
         old_atr > 0
-        and current_atr < old_atr * 0.80
+        and current_atr
+        < old_atr * 0.80
     )
 
     bb_mid = close.rolling(
@@ -348,17 +508,26 @@ def analyze_coiling_setup(df: pd.DataFrame) -> dict:
         20
     ).std()
 
-    bb_upper = bb_mid + (
-        bb_std * 2
+    bb_upper = (
+        bb_mid
+        + bb_std * 2
     )
 
-    bb_lower = bb_mid - (
-        bb_std * 2
+    bb_lower = (
+        bb_mid
+        - bb_std * 2
     )
 
     bb_width = (
-        (bb_upper - bb_lower)
-        / bb_mid.replace(0, np.nan)
+        (
+            bb_upper
+            - bb_lower
+        )
+        /
+        bb_mid.replace(
+            0,
+            np.nan
+        )
     )
 
     current_bb_width = _safe_float(
@@ -388,7 +557,9 @@ def analyze_coiling_setup(df: pd.DataFrame) -> dict:
     )
 
     volume_ratio = (
-        current_volume_ma / old_volume_ma
+        current_volume_ma
+        /
+        old_volume_ma
         if old_volume_ma > 0
         else 0
     )
@@ -400,7 +571,7 @@ def analyze_coiling_setup(df: pd.DataFrame) -> dict:
 
     price_change = close.diff()
 
-    direction = np.where(
+    direction_values = np.where(
         price_change > 0,
         1,
         np.where(
@@ -412,7 +583,7 @@ def analyze_coiling_setup(df: pd.DataFrame) -> dict:
 
     obv = (
         pd.Series(
-            direction,
+            direction_values,
             index=data.index
         )
         * volume
@@ -427,26 +598,41 @@ def analyze_coiling_setup(df: pd.DataFrame) -> dict:
     )
 
     obv_rising = (
-        obv_recent > obv_old
+        obv_recent
+        > obv_old
     )
 
     price_3d_change = (
+
         (
             close.iloc[-1]
-            / close.iloc[-4]
-        ) - 1
+            /
+            close.iloc[-4]
+        )
+        - 1
+
     ) * 100
 
     price_7d_change = (
+
         (
             close.iloc[-1]
-            / close.iloc[-8]
-        ) - 1
+            /
+            close.iloc[-8]
+        )
+        - 1
+
     ) * 100
 
     price_not_overextended = (
-        price_3d_change < 15
-        and price_7d_change < 25
+
+        price_3d_change
+        <= MAX_INITIAL_MOVE_PCT
+
+        and
+
+        price_7d_change
+        <= 10
     )
 
     resistance = _safe_float(
@@ -458,21 +644,27 @@ def analyze_coiling_setup(df: pd.DataFrame) -> dict:
     )
 
     resistance_distance = (
+
         (
             resistance
             - current_price
         )
-        / current_price
+        /
+        current_price
         * 100
+
         if current_price > 0
         else 999
     )
 
     near_resistance = (
-        0 <= resistance_distance <= 8
+        0
+        <= resistance_distance
+        <= 8
     )
 
     score = 0
+
     reasons = []
 
     if atr_compression:
@@ -512,7 +704,7 @@ def analyze_coiling_setup(df: pd.DataFrame) -> dict:
         score += 15
 
         reasons.append(
-            "قیمت هنوز وارد پامپ شدید نشده"
+            "حرکت اصلی هنوز شروع نشده"
         )
 
     if near_resistance:
@@ -520,7 +712,7 @@ def analyze_coiling_setup(df: pd.DataFrame) -> dict:
         score += 15
 
         reasons.append(
-            "قیمت به مقاومت مهم نزدیک است"
+            "قیمت در آستانه مقاومت مهم قرار دارد"
         )
 
     active_conditions = sum(
@@ -535,26 +727,48 @@ def analyze_coiling_setup(df: pd.DataFrame) -> dict:
     )
 
     match = (
+
         active_conditions >= 4
+
         and score >= 60
+
+        and price_3d_change
+        <= MAX_INITIAL_MOVE_PCT
     )
 
     return {
-        "match": match,
-        "score": score,
-        "type": "PRE_BREAKOUT_COILING",
 
-        "volatility_compression": atr_compression,
-        "bollinger_squeeze": bb_squeeze,
-        "volume_accumulation": volume_accumulation,
-        "obv_rising": obv_rising,
-        "price_not_overextended": price_not_overextended,
-        "near_resistance": near_resistance,
+        "match": match,
+
+        "score": score,
+
+        "type":
+            "PRE_BREAKOUT_COILING",
+
+        "volatility_compression":
+            atr_compression,
+
+        "bollinger_squeeze":
+            bb_squeeze,
+
+        "volume_accumulation":
+            volume_accumulation,
+
+        "obv_rising":
+            obv_rising,
+
+        "price_not_overextended":
+            price_not_overextended,
+
+        "near_resistance":
+            near_resistance,
 
         "atr_ratio": round(
             current_atr / old_atr,
             3
-        ) if old_atr > 0 else None,
+        )
+        if old_atr > 0
+        else None,
 
         "bollinger_width": round(
             current_bb_width,
@@ -621,9 +835,11 @@ def run_confluence_analysis(
         or structure_df is None
         or len(structure_df) < 30
     ):
+
         return None
 
     reasons = []
+
     risks = []
 
     total_score = 0.0
@@ -637,14 +853,20 @@ def run_confluence_analysis(
         direction=direction
     )
 
-    total_score += ind_result["score"]
+    total_score += ind_result[
+        "score"
+    ]
 
     reasons.extend(
-        ind_result["reasons"]
+        ind_result[
+            "reasons"
+        ]
     )
 
     risks.extend(
-        ind_result["risks"]
+        ind_result[
+            "risks"
+        ]
     )
 
     smc_result = analyze_smc(
@@ -652,14 +874,20 @@ def run_confluence_analysis(
         direction=direction
     )
 
-    total_score += smc_result["score"]
+    total_score += smc_result[
+        "score"
+    ]
 
     reasons.extend(
-        smc_result["reasons"]
+        smc_result[
+            "reasons"
+        ]
     )
 
     risks.extend(
-        smc_result["risks"]
+        smc_result[
+            "risks"
+        ]
     )
 
     mtf_result = _mtf_alignment_score(
@@ -668,14 +896,20 @@ def run_confluence_analysis(
         direction
     )
 
-    total_score += mtf_result["score"]
+    total_score += mtf_result[
+        "score"
+    ]
 
     reasons.extend(
-        mtf_result["reasons"]
+        mtf_result[
+            "reasons"
+        ]
     )
 
     risks.extend(
-        mtf_result["risks"]
+        mtf_result[
+            "risks"
+        ]
     )
 
     if extra_analyzer:
@@ -712,7 +946,10 @@ def run_confluence_analysis(
     )
 
     total_score = round(
-        min(total_score, 100),
+        min(
+            total_score,
+            100
+        ),
         1
     )
 
@@ -732,13 +969,17 @@ def run_confluence_analysis(
 
     swing_low_20d = min(
         lows[-21:-1]
-    ) if len(lows) >= 21 else min(
+    )
+    if len(lows) >= 21
+    else min(
         lows[:-1]
     )
 
     swing_high_20d = max(
         highs[-21:-1]
-    ) if len(highs) >= 21 else max(
+    )
+    if len(highs) >= 21
+    else max(
         highs[:-1]
     )
 
@@ -750,14 +991,21 @@ def run_confluence_analysis(
     )
 
     signal_bar = (
+
         min_signal_score
-        if min_signal_score is not None
+
+        if min_signal_score
+        is not None
+
         else MIN_SIGNAL_SCORE
     )
 
     decision = (
+
         "SIGNAL"
+
         if total_score >= signal_bar
+
         else "REJECT"
     )
 
@@ -784,56 +1032,90 @@ def run_confluence_analysis(
     )
 
     return {
-        "symbol": symbol,
-        "direction": direction,
-        "score": total_score,
-        "decision": decision,
 
-        "reasons": reasons[:8],
-        "risks": risks[:5],
+        "symbol":
+            symbol,
 
-        "trade_levels": trade_levels,
+        "direction":
+            direction,
 
-        "current_price": round(
-            current_price,
-            8
-        ),
+        "score":
+            total_score,
 
-        "structure_signal": smc_result.get(
-            "structure_signal"
-        ),
+        "decision":
+            decision,
 
-        "smart_money_alert": extra_result.get(
-            "whale_alert",
-            False
-        ),
+        "reasons":
+            reasons[:8],
 
-        "funding_rate": extra_result.get(
-            "funding_rate"
-        ),
+        "risks":
+            risks[:5],
 
-        "open_interest": extra_result.get(
-            "open_interest"
-        ),
+        "trade_levels":
+            trade_levels,
 
-        "long_short_ratio": extra_result.get(
-            "long_short_ratio"
-        ),
+        "current_price":
+            round(
+                current_price,
+                8
+            ),
 
-        "catalyst_breakout": catalyst_result,
+        "structure_signal":
+            smc_result.get(
+                "structure_signal"
+            ),
 
-        "trendline_break": trendline_result,
+        "smart_money_alert":
+            extra_result.get(
+                "whale_alert",
+                False
+            ),
 
-        "coiling_setup": coiling_result,
+        "funding_rate":
+            extra_result.get(
+                "funding_rate"
+            ),
+
+        "open_interest":
+            extra_result.get(
+                "open_interest"
+            ),
+
+        "long_short_ratio":
+            extra_result.get(
+                "long_short_ratio"
+            ),
+
+        "catalyst_breakout":
+            catalyst_result,
+
+        "trendline_break":
+            trendline_result,
+
+        "coiling_setup":
+            coiling_result,
 
         "breakdown": {
-            "indicators": ind_result["score"],
-            "smc": smc_result["score"],
-            "mtf": mtf_result["score"],
-            "extra": extra_result.get(
-                "score",
-                0
-            ),
+
+            "indicators":
+                ind_result[
+                    "score"
+                ],
+
+            "smc":
+                smc_result[
+                    "score"
+                ],
+
+            "mtf":
+                mtf_result[
+                    "score"
+                ],
+
+            "extra":
+                extra_result.get(
+                    "score",
+                    0
+                ),
         },
     }
-       
