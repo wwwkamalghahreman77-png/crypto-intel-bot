@@ -3,7 +3,7 @@ futures/futures_scanner.py
 
 اسکنر فیوچرز - نسخه‌ی مبتنی بر موتور کانفلوئنس (analysis/confluence.py).
 منطق قدیمی امتیازدهی ساده حذف و با امتیازدهی چندبعدی (اندیکاتور + SMC + MTF + مشتقات) جایگزین شد.
-خروجی هر آیتم شامل کلید "decision" است: SIGNAL / WATCHLIST / REJECT (فقط دو مورد اول برگردانده می‌شوند).
+خروجی هر آیتم شامل کلید "decision" است: SIGNAL / REJECT (فقط SIGNAL برگردانده می‌شود).
 
 فیوچرز عمداً سخت‌گیرتر از پیش‌فرض مشترک (۵۵) تنظیم شده: ۷۰ برای SIGNAL،
 چون تست واقعی نشون داد با ۵۵ نسبت بالایی از کاندیدها سیگنال کامل می‌گرفتن
@@ -61,7 +61,6 @@ def scan_futures(max_results=15):
             direction=direction,
             extra_analyzer=analyze_derivatives,
             min_signal_score=70,     # فیوچرز سخت‌گیرتر از پیش‌فرض (۵۵) - کمتر ولی قوی‌تر
-            min_watchlist_score=50,
         )
 
         if analysis is None:
@@ -69,7 +68,10 @@ def scan_futures(max_results=15):
 
         all_scores.append(analysis["score"])
 
-        if analysis["decision"] == "REJECT":
+        catalyst_hit = analysis.get("catalyst_breakout", {}).get("match")
+        trendline_hit = analysis.get("trendline_break", {}).get("break_confirmed")
+
+        if analysis["decision"] == "REJECT" and not catalyst_hit and not trendline_hit:
             continue
 
         signal.update(analysis)
@@ -82,7 +84,6 @@ def scan_futures(max_results=15):
         print(f"[FuturesScanner] امتیازها: max={max(all_scores)} avg={round(sum(all_scores)/len(all_scores), 1)} (n={len(all_scores)})")
 
     signal_count = sum(1 for r in results if r["decision"] == "SIGNAL")
-    watch_count = sum(1 for r in results if r["decision"] == "WATCHLIST")
-    print(f"[FuturesScanner] {signal_count} سیگنال نهایی / {watch_count} واچ‌لیست")
+    print(f"[FuturesScanner] {signal_count} سیگنال نهایی")
 
     return results[:max_results]
