@@ -1,3 +1,5 @@
+# analysis/scoring.py
+
 WEIGHTS = {
     "security": 0.25,
     "fundamental": 0.20,
@@ -10,16 +12,47 @@ WEIGHTS = {
 
 
 def calculate_total_score(scores: dict) -> float:
+
     total = 0.0
+
     for key, weight in WEIGHTS.items():
-        total += scores.get(key, 0) * weight
-    return round(total, 1)
+
+        value = scores.get(
+            key,
+            0
+        )
+
+        try:
+
+            value = float(
+                value
+            )
+
+        except Exception:
+
+            value = 0
+
+        total += (
+            value
+            * weight
+        )
+
+    return round(
+        total,
+        1
+    )
 
 
-def classify_status(total_score: float) -> str:
+def classify_status(
+    total_score: float
+) -> str:
+
     if total_score >= 85:
+
         return "STRONG PROJECT"
+
     elif total_score >= 70:
+
         return "WATCHLIST"
-    else:
-        return "REJECT"
+
+    return "REJECT"
