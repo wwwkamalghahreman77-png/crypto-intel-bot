@@ -10,6 +10,7 @@ from scheduler.jobs import (
     job_spot_scan,
     job_monitor_active_signals,
     job_send_performance_report,
+    job_daily_metals_report,
 )
 
 
@@ -55,6 +56,10 @@ def main():
     elif mode == "performance":
 
         job_send_performance_report()
+
+    elif mode == "metals":
+
+        job_daily_metals_report()
 
     else:
 
