@@ -40,6 +40,11 @@ from database.db import (
 
 from database.models import CryptoReport
 
+from database.signal_history import (
+    already_sent,
+    mark_sent,
+)
+
 MIN_SIGNAL_SCORE = 55
 
 
