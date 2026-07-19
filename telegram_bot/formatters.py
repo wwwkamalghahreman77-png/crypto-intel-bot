@@ -216,49 +216,64 @@ def format_market_signal_v2(signal: dict) -> str:
     return _format_scanner_signal(signal, "Market", is_futures=False)
 
 
-def format_watchlist_signal(signal: dict) -> str:
+def format_catalyst_alert(signal: dict) -> str:
     """
-    پیام واچ‌لیست برای سیگنال‌هایی که نزدیک به تایید هستند ولی هنوز تاییدنشده‌اند.
-    مطابق فرمت درخواستی: قیمت فعلی، سطح مقاومت/حمایت، شرط فعال‌سازی، ورود پیشنهادی، نقطه ابطال.
+    هشدار الگوی جهش کاتالیزوری شبیه AKE/BANK - مستقل از امتیاز کانفلوئنس ارسال می‌شود
+    (چون این‌طور حرکت‌ها معمولاً سریع‌تر از رسیدن به آستانه‌ی SIGNAL کامل اتفاق می‌افتن).
     """
 
     symbol = clean_symbol(signal.get("symbol", ""))
-    direction = signal.get("direction", "LONG")
-
-    levels = signal.get("trade_levels") or {}
+    c = signal.get("catalyst_breakout", {}) or {}
     current_price = signal.get("current_price", "—")
-    trigger = levels.get("entry", "—")
-    invalidation = levels.get("stop_loss", "—")
 
-    is_long = direction == "LONG"
-    level_label = "مقاومت" if is_long else "حمایت"
-    condition = "شکست و تثبیت بالای" if is_long else "شکست و تثبیت زیر"
-    trend_result = "صعودی" if is_long else "نزولی"
-
-    reasons = signal.get("reasons") or []
-    reason_text = "، ".join(reasons[:2]) if reasons else "تایید ساختار قیمت"
+    reasons_text = "\n".join(f"• {r}" for r in c.get("reasons", [])) or "—"
 
     return f"""
-👀 WATCHLIST | {symbol}
+🚀 الگوی مشابه AKE/BANK | {symbol}
 
 💰 قیمت فعلی
 {current_price}
 
-📍 {level_label}
-{trigger}
+📊 حجم نسبت به میانگین ۲۰ روزه
+{c.get('volume_ratio', '—')}×
 
-اگر قیمت {condition} {trigger} با حجم قوی بسته شود،
-روند {trend_result} می‌شود.
+📈 رشد ۳ روز اخیر
+{c.get('change_3d', '—')}٪
 
-✅ ورود پیشنهادی
-{trigger}
+🧠 دلایل تطبیق ({c.get('hits', 0)}/4)
+{reasons_text}
 
-🛑 نقطه ابطال
-{invalidation}
+⚠️ این یک هشدار الگوی رفتاری است، نه سیگنال معاملاتی کامل با حد سود/ضرر.
+قبل از خرید، ریسک/ریوارد و نقدشوندگی رو خودت بررسی کن.
+"""
 
-📊 امتیاز فعلی
-{signal.get('score', 0)}/100
 
-🧠 دلیل
-{reason_text}
+def format_trendline_alert(signal: dict) -> str:
+    """
+    هشدار شکست خط روند بلندمدت (۹۰ و ۱۸۰ روزه هم‌راستا). اولویت پایین‌تر از
+    catalyst_breakout است - صرفا جنبه‌ی اطلاع‌رسانی دارد.
+    """
+
+    symbol = clean_symbol(signal.get("symbol", ""))
+    t = signal.get("trendline_break", {}) or {}
+    current_price = signal.get("current_price", "—")
+
+    direction = t.get("trend_direction")
+    icon = "📉" if direction == "UP" else "📈"
+
+    return f"""
+📐 شکست خط روند بلندمدت | {symbol}
+
+{icon} {t.get('label', '—')}
+
+💰 قیمت فعلی
+{current_price}
+
+📏 مقدار خط روند (بازه ۹۰ روزه)
+{t.get('trend_value_90d', '—')}
+
+📏 مقدار خط روند (بازه ۱۸۰ روزه)
+{t.get('trend_value_180d', '—')}
+
+ℹ️ این یک هشدار اطلاعاتی است؛ اهمیتش کمتر از هشدار الگوی کاتالیزوری بالاست.
 """
