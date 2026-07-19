@@ -15,6 +15,7 @@ from telegram_bot.formatters import (
     format_catalyst_alert,
     format_trendline_alert,
     format_coiling_alert,
+    format_metal_report
 )
 
 from analysis.technical import analyze_technical
@@ -1528,3 +1529,88 @@ def job_monitor_active_signals():
                 highest_tp_hit=final_label
 
             )
+            def job_daily_metals_report():
+
+    print(
+        "[Job] شروع تحلیل روزانه طلا"
+    )
+
+    from spot.toobit import (
+        get_klines
+    )
+
+    from analysis.confluence import (
+        run_confluence_analysis
+    )
+
+    symbol = "PAXGUSDT"
+
+    candles = get_klines(
+        symbol,
+        interval="1d",
+        limit=210
+    )
+
+    if (
+        not candles
+        or
+        len(candles) < 100
+    ):
+
+        print(
+            "[Metals] داده کافی برای طلا "
+            "در دسترس نبود"
+        )
+
+        return
+
+    signal = run_confluence_analysis(
+
+        symbol=symbol,
+
+        get_klines_fn=get_klines,
+
+        signal_meta={
+            "volume": 0,
+            "change": 0,
+        },
+
+        direction="LONG",
+
+    )
+
+    if not signal:
+
+        print(
+            "[Metals] تحلیل طلا ناموفق بود"
+        )
+
+        return
+
+    signal["symbol"] = "GOLD"
+
+    # تحلیل روزانه صرف نظر از SIGNAL/REJECT
+    # همیشه ارسال می‌شود؛ چون گزارش است نه سیگنال معاملاتی
+    text = format_metal_report(
+        signal
+    )
+
+    message_id = send_message(
+        text
+    )
+
+    log_telegram_message(
+
+        "metal_daily_report",
+
+        "GOLD",
+
+        message_id,
+
+        preview=text
+
+    )
+
+    print(
+        "[Job] پایان تحلیل روزانه طلا"
+    )
