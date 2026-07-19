@@ -1501,7 +1501,7 @@ def job_monitor_active_signals():
 
                     final_label = tp_key
 
-                if final_hit_now:
+                        if final_hit_now:
 
             db.update(
 
@@ -1529,7 +1529,6 @@ def job_monitor_active_signals():
                 highest_tp_hit=final_label
 
             )
-
 
 
 def job_daily_metals_report():
