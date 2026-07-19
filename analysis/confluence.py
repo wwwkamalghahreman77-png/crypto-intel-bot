@@ -10,24 +10,28 @@ analysis/confluence.py
 
 تصمیم نهایی بر اساس امتیاز کل:
     >= 55   → SIGNAL      (سیگنال معاملاتی کامل ارسال شود)
-    35-54   → WATCHLIST   (نزدیک به تایید - در واچ‌لیست قرار گیرد)
-    < 35    → REJECT      (سیگنال ضعیف - نادیده گرفته شود)
+    < 55    → REJECT      (سیگنال ضعیف - نادیده گرفته شود)
 
-توجه: چون هر ۴ بخش (اندیکاتور ۴۵ + SMC ۲۰ + MTF ۲۰ + تکمیلی ۱۵) هم‌زمان
-باید تقریبا کامل شلیک کنند تا به ۱۰۰ برسند، آستانه‌های قبلی (۸۰ و بعد ۶۸)
-عملا هیچ‌وقت رد نمی‌شدند و همه‌چیز در WATCHLIST می‌موند (تست واقعی نشون داد
-حتی ۶۸ هم رد نشد). آستانه به ۵۵ کاهش یافت. futures_scanner.py و
-spot_scanner.py و market_scanner/signal_detector.py الان امتیاز max/avg هر
-اسکن رو هم لاگ می‌کنن تا اگه بازم لازم بود، این عدد رو دقیق (نه حدسی) روی
-داده‌ی واقعی تنظیم کنیم.
+توجه: ویژگی WATCHLIST (سیگنال‌های نزدیک به تایید) به درخواست کاربر حذف شد -
+دیگر پیامی برای این حالت ارسال نمی‌شود و در دیتابیس هم ثبت نمی‌شود.
+futures_scanner.py و spot_scanner.py و market_scanner/signal_detector.py
+همچنان امتیاز max/avg هر اسکن رو لاگ می‌کنن تا اگه بازم لازم بود، این عدد
+را دقیق (نه حدسی) روی داده‌ی واقعی تنظیم کنیم.
+
+علاوه بر امتیاز کانفلوئنس، دو بررسی مستقل دیگر هم روی هر نماد انجام و در
+خروجی برگردانده می‌شود (مستقل از SIGNAL/REJECT، چون ممکنه هنوز امتیاز کامل
+نگرفته باشن ولی الگوی رفتاری مهمی نشون بدن):
+    - catalyst_breakout: الگوی جهش شبیه AKE/BANK (پایه‌ی فشرده + جهش حجم + شکست + رشد اخیر)
+    - trendline_break: شکست خط روند بلندمدت (۹۰ و ۱۸۰ روزه)
 """
 
 import time
 from analysis.indicators import klines_to_df, compute_indicators, score_indicator_bundle
 from analysis.smc import analyze_smc
+from analysis.catalyst_breakout import analyze_catalyst_breakout
+from analysis.trendline import detect_trendline_break
 
 MIN_SIGNAL_SCORE = 55
-MIN_WATCHLIST_SCORE = 35
 
 TIMEFRAMES_MTF = ["15m", "1h", "4h", "1d", "1w"]
 
@@ -134,16 +138,16 @@ def calculate_trade_levels(current_price, swing_low, swing_high, direction):
         }
 
 
-def run_confluence_analysis(symbol, get_klines_fn, signal_meta: dict, direction="LONG", extra_analyzer=None, min_signal_score=None, min_watchlist_score=None) -> "dict | None":
+def run_confluence_analysis(symbol, get_klines_fn, signal_meta: dict, direction="LONG", extra_analyzer=None, min_signal_score=None) -> "dict | None":
     """
     تحلیل کامل کانفلوئنس یک نماد.
 
     get_klines_fn: تابع get_klines(symbol, interval, limit) بورس (فیوچرز یا اسپات توبیت)
     signal_meta: دیکشنری اولیه سیگنال (symbol, type, change, volume, ...)
     extra_analyzer: تابع اختیاری (symbol, direction) -> dict با score/reasons/risks (مثل derivatives.analyze_derivatives)
-    min_signal_score / min_watchlist_score: اختیاری - اگر پاس داده نشوند، از مقادیر پیش‌فرض
-        ماژول (MIN_SIGNAL_SCORE / MIN_WATCHLIST_SCORE) استفاده می‌شود. برای اینکه یک بازار
-        (مثلا فیوچرز) بتواند سخت‌گیرتر از بقیه باشد، بدون تغییر آستانه‌ی مشترک.
+    min_signal_score: اختیاری - اگر پاس داده نشود، از مقدار پیش‌فرض ماژول (MIN_SIGNAL_SCORE)
+        استفاده می‌شود. برای اینکه یک بازار (مثلا فیوچرز) بتواند سخت‌گیرتر از بقیه باشد،
+        بدون تغییر آستانه‌ی مشترک.
     """
 
     primary_candles = get_klines_fn(symbol, interval="4h", limit=100)
@@ -200,35 +204,17 @@ def run_confluence_analysis(symbol, get_klines_fn, signal_meta: dict, direction=
 
     trade_levels = calculate_trade_levels(current_price, swing_low_20d, swing_high_20d, direction)
 
-    # سطوح واچ‌لیست: برخلاف trade_levels (که برای SIGNAL تایید‌شده، ورود = قیمت فعلیه)
-    # اینجا هنوز چیزی تایید نشده، پس باید سطح شکست واقعی (مقاومت/حمایت ۲۰ روزه)
-    # جدا از قیمت فعلی نشون داده بشه، نه اینکه با قیمت فعلی یکی باشه.
-    # بافر ۰.۵٪ (نه ۰.۲٪) تا برای کوین‌های ارزون هم فاصله محسوس بمونه.
-    # ابطال = ۳٪ فاصله از ورود پیشنهادی (سناریوی نزدیک واچ‌لیست)، نه استاپ ساختاری دور trade_levels.
-    if direction == "LONG":
-        level_price = round(swing_high_20d, 8)
-        wl_suggested_entry = round(level_price * 1.005, 8)  # ۰.۵٪ بالاتر از سطح، برای تایید شکست واقعی
-        wl_invalidation = round(wl_suggested_entry * 0.97, 8)  # ۳٪ زیر ورود پیشنهادی
-    else:
-        level_price = round(swing_low_20d, 8)
-        wl_suggested_entry = round(level_price * 0.995, 8)
-        wl_invalidation = round(wl_suggested_entry * 1.03, 8)
-
-    watchlist_levels = {
-        "level_price": level_price,
-        "suggested_entry": wl_suggested_entry,
-        "invalidation": wl_invalidation,
-    }
-
     signal_bar = min_signal_score if min_signal_score is not None else MIN_SIGNAL_SCORE
-    watchlist_bar = min_watchlist_score if min_watchlist_score is not None else MIN_WATCHLIST_SCORE
 
-    if total_score >= signal_bar:
-        decision = "SIGNAL"
-    elif total_score >= watchlist_bar:
-        decision = "WATCHLIST"
-    else:
-        decision = "REJECT"
+    decision = "SIGNAL" if total_score >= signal_bar else "REJECT"
+
+    # ۵) الگوی جهش کاتالیزوری شبیه AKE/BANK (از همان structure_df، بدون فراخوانی اضافه API)
+    catalyst_result = analyze_catalyst_breakout(structure_df)
+
+    # ۶) شکست خط روند بلندمدت - نیازمند تاریخچه‌ی طولانی‌تر (۲۰۰ کندل روزانه)
+    long_term_candles = get_klines_fn(symbol, interval="1d", limit=200)
+    long_term_df = klines_to_df(long_term_candles)
+    trendline_result = detect_trendline_break(long_term_df)
 
     return {
         "symbol": symbol,
@@ -238,13 +224,14 @@ def run_confluence_analysis(symbol, get_klines_fn, signal_meta: dict, direction=
         "reasons": reasons[:8],
         "risks": risks[:5],
         "trade_levels": trade_levels,
-        "watchlist_levels": watchlist_levels,
         "current_price": round(current_price, 8),
         "structure_signal": smc_result.get("structure_signal"),
         "smart_money_alert": extra_result.get("whale_alert", False),
         "funding_rate": extra_result.get("funding_rate"),
         "open_interest": extra_result.get("open_interest"),
         "long_short_ratio": extra_result.get("long_short_ratio"),
+        "catalyst_breakout": catalyst_result,
+        "trendline_break": trendline_result,
         "breakdown": {
             "indicators": ind_result["score"],
             "smc": smc_result["score"],
@@ -252,3 +239,4 @@ def run_confluence_analysis(symbol, get_klines_fn, signal_meta: dict, direction=
             "extra": extra_result.get("score", 0),
         },
     }
+    
