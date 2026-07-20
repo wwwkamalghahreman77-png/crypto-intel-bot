@@ -4,7 +4,7 @@
 
 from dex.gem_scanner import run_full_scan
 
-from telegram_bot.bot import send_message
+from telegram_bot.bot import send_message, get_primary_chat_id
 
 from telegram_bot.formatters import (
     format_dex_discovery,
@@ -15,7 +15,9 @@ from telegram_bot.formatters import (
     format_catalyst_alert,
     format_trendline_alert,
     format_coiling_alert,
-    format_metal_report
+    format_metal_report,
+    format_futures_top_picks,
+    classify_trade_term,
 )
 
 from analysis.technical import analyze_technical
@@ -101,7 +103,7 @@ def save_active_signal(
             0
         ),
 
-        "telegram_chat_id": settings.telegram_chat_id,
+        "telegram_chat_id": get_primary_chat_id(),
 
         "telegram_message_id": message_id,
 
@@ -189,7 +191,7 @@ def log_telegram_message(
                     symbol,
 
                 "telegram_chat_id":
-                    settings.telegram_chat_id,
+                    get_primary_chat_id(),
 
                 "telegram_message_id":
                     message_id,
@@ -845,11 +847,72 @@ def job_futures_scan():
 
         )
 
+    _send_futures_top_picks(signals)
+
     print(
 
         f"[Job] پایان Futures Scanner - "
         f"{len(signals)} مورد"
 
+    )
+
+
+def _send_futures_top_picks(signals):
+
+    short_term_signals = []
+
+    for signal in signals:
+
+        if signal.get("decision") != "SIGNAL":
+            continue
+
+        levels = signal.get("trade_levels") or {}
+
+        entry = (
+            levels.get("entry")
+            or signal.get("price")
+        )
+
+        if not entry:
+            continue
+
+        direction = (
+            signal.get("direction")
+            or signal.get("type")
+            or "LONG"
+        )
+
+        term = classify_trade_term(
+            signal,
+            entry,
+            direction
+        )
+
+        if "کوتاه‌مدت" in term:
+            short_term_signals.append(signal)
+
+    if not short_term_signals:
+        return
+
+    short_term_signals.sort(
+        key=lambda s: s.get("score", 0),
+        reverse=True
+    )
+
+    top_picks = short_term_signals[:3]
+
+    text = format_futures_top_picks(top_picks)
+
+    if not text:
+        return
+
+    message_id = send_message(text)
+
+    log_telegram_message(
+        "futures_top_picks",
+        "ALL",
+        message_id,
+        preview=text
     )
 
 
