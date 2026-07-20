@@ -83,6 +83,49 @@ def _pct(entry, target, direction):
         return 0
 
 
+def classify_trade_term(
+    signal,
+    entry,
+    direction="LONG"
+):
+    """
+    افق زمانی معامله را بر اساس فاصله دورترین هدف سود تا نقطه ورود
+    تخمین می‌زند و یکی از سه برچسب زیر را برمی‌گرداند.
+    """
+
+    targets = _build_targets(
+        signal,
+        entry,
+        direction
+    )
+
+    if not targets:
+        return "🟩 کوتاه‌مدت"
+
+    farthest = (
+        targets.get("tp4")
+        or targets.get("tp3")
+        or targets.get("tp2")
+        or targets.get("tp1")
+    )
+
+    pct = abs(
+        _pct(
+            entry,
+            farthest,
+            direction
+        )
+    )
+
+    if pct >= 40:
+        return "🟦 بلندمدت"
+
+    if pct >= 15:
+        return "🟨 میان‌مدت"
+
+    return "🟩 کوتاه‌مدت"
+
+
 def _build_targets(
     signal,
     entry=None,
@@ -687,6 +730,12 @@ def _format_scanner_signal(
             )
         )
 
+    term_label = classify_trade_term(
+        signal,
+        entry,
+        signal_type
+    )
+
     leverage_line = ""
 
     if is_futures:
@@ -771,6 +820,8 @@ def _format_scanner_signal(
 
 {direction}
 
+⏳ افق معامله: {term_label}
+
 ━━━━━━━━━━━━━━
 
 💰 نقطه ورود
@@ -797,6 +848,94 @@ def _format_scanner_signal(
 ⚠️ سیگنال بر اساس تأیید چندگانه صادر شده است.
 مدیریت سرمایه الزامی است.
 """
+
+
+def format_futures_top_picks(
+    top_signals
+):
+
+    if not top_signals:
+        return ""
+
+    lines = [
+        "🏆 برترین موقعیت‌های فیوچرز (کوتاه‌مدت)",
+        "━━━━━━━━━━━━━━",
+        ""
+    ]
+
+    for index, signal in enumerate(
+        top_signals,
+        start=1
+    ):
+
+        symbol = clean_symbol(
+            signal.get("symbol", "")
+        )
+
+        direction = (
+            signal.get("direction")
+            or signal.get("type")
+            or "LONG"
+        ).upper()
+
+        emoji = (
+            "🟢" if direction == "LONG"
+            else "🔴"
+        )
+
+        score = min(
+            signal.get("score", 0),
+            100
+        )
+
+        risks = (
+            signal.get("risks") or []
+        )
+
+        leverage = suggest_leverage(
+            score,
+            risks
+        )
+
+        levels = (
+            signal.get("trade_levels")
+            or {}
+        )
+
+        entry = (
+            levels.get("entry")
+            or signal.get("price")
+            or "—"
+        )
+
+        targets = _build_targets(
+            signal,
+            entry,
+            direction
+        )
+
+        tp1 = targets.get("tp1")
+
+        profit = (
+            _pct(entry, tp1, direction)
+            if tp1 else 0
+        )
+
+        lines.append(
+            f"{index}. {emoji} {symbol} | "
+            f"امتیاز {score}/100 | "
+            f"اهرم {leverage} | "
+            f"ورود {_fmt_price(entry)} | "
+            f"TP1 (+{profit}%)"
+        )
+
+    lines.append("")
+    lines.append(
+        "⚠️ این دایجست صرفاً یک خلاصه سریع است؛ "
+        "برای جزئیات کامل هر معامله به پیام سیگنال اصلی آن مراجعه کنید."
+    )
+
+    return "\n".join(lines)
 
 
 def format_futures_signal(
