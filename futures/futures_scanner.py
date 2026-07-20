@@ -135,7 +135,7 @@ def scan_futures(
                 signal_meta=signal,
                 direction=direction,
                 extra_analyzer=analyze_derivatives,
-                min_signal_score=70,
+                min_signal_score=55,
             )
         )
 
