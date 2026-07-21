@@ -625,92 +625,29 @@ def _format_scanner_signal(
     is_futures: bool = False
 ) -> str:
 
-    symbol = clean_symbol(
-        signal.get(
-            "symbol",
-            ""
-        )
-    )
+    symbol = clean_symbol(signal.get("symbol", ""))
 
     signal_type = (
-        signal.get(
-            "direction"
-        )
-        or
-        signal.get(
-            "type"
-        )
-        or
-        ""
+        signal.get("direction") or signal.get("type") or ""
     ).upper()
 
     if signal_type == "LONG":
-
-        direction = (
-            "🟢 LONG | سناریوی صعودی"
-        )
-
+        direction = "🟢 LONG | سناریوی صعودی"
     elif signal_type == "SHORT":
-
-        direction = (
-            "🔴 SHORT | سناریوی نزولی"
-        )
-
+        direction = "🔴 SHORT | سناریوی نزولی"
     else:
+        direction = "⚪ " + signal_type
 
-        direction = (
-            "⚪ "
-            + signal_type
-        )
+    levels = signal.get("trade_levels") or {}
+    entry = levels.get("entry") or signal.get("price") or "—"
+    score = min(signal.get("score", 0), 100)
+    reasons = signal.get("reasons") or []
+    risks = signal.get("risks") or []
+    pattern = signal.get("pattern")
+    level_analysis = signal.get("level_analysis") or {}
 
-    levels = (
-        signal.get(
-            "trade_levels"
-        )
-        or {}
-    )
-
-    entry = (
-        levels.get(
-            "entry"
-        )
-        or
-        signal.get(
-            "price"
-        )
-        or
-        "—"
-    )
-
-    score = min(
-        signal.get(
-            "score",
-            0
-        ),
-        100
-    )
-
-    reasons = (
-        signal.get(
-            "reasons"
-        )
-        or []
-    )
-
-    risks = (
-        signal.get(
-            "risks"
-        )
-        or []
-    )
-
-    reason_text = "\n".join(
-        f"✅ {r}"
-        for r in reasons[:5]
-    )
-
+    reason_text = "\n".join(f"✅ {r}" for r in reasons[:5])
     if not reason_text:
-
         reason_text = (
             "✅ تأیید چندگانه تکنیکال\n"
             "✅ بررسی روند و حجم\n"
@@ -718,99 +655,119 @@ def _format_scanner_signal(
         )
 
     risk_block = ""
-
     if risks:
-
         risk_block = (
             "\n\n⚠️ ریسک‌های شناسایی‌شده\n\n"
-            +
-            "\n".join(
-                f"⚠️ {r}"
-                for r in risks[:3]
-            )
+            + "\n".join(f"⚠️ {r}" for r in risks[:3])
         )
 
-    term_label = classify_trade_term(
-        signal,
-        entry,
-        signal_type
-    )
+    term_label = classify_trade_term(signal, entry, signal_type)
+    pattern_line = f"\n🔍 نوع الگو: {pattern}\n" if pattern else ""
 
     leverage_line = ""
-
     if is_futures:
+        leverage = suggest_leverage(score, risks)
+        leverage_line = f"\n\n⚡ اهرم پیشنهادی\n{leverage}"
 
-        leverage = suggest_leverage(
-            score,
-            risks
+    # ---- حالت خاص: قیمت نزدیک مقاومت/حمایت است و هنوز شکسته نشده ----
+    if level_analysis.get("status") == "near_level":
+
+        entry1 = level_analysis["entry1"]
+        entry2 = level_analysis["entry2"]
+        level_type = level_analysis["level_type"]
+        level_price = level_analysis["level_price"]
+        sb = level_analysis["scenario_breakout"]
+        sr = level_analysis["scenario_rejection"]
+
+        breakout_targets = "\n".join(
+            f"{icon} TP{i}: {_fmt_price(sb[f'tp{i}'])} "
+            f"({_pct(sb['entry'], sb[f'tp{i}'], signal_type)}%)"
+            for i, icon in enumerate(["🥇", "🥈", "🥉", "🏆"], start=1)
+            if sb.get(f"tp{i}") is not None
         )
 
-        leverage_line = (
-            "\n\n⚡ اهرم پیشنهادی\n"
-            f"{leverage}"
+        opposite_type = "SHORT" if signal_type == "LONG" else "LONG"
+
+        rejection_targets = "\n".join(
+            f"{icon} TP{i}: {_fmt_price(sr[f'tp{i}'])} "
+            f"({_pct(sr['entry'], sr[f'tp{i}'], opposite_type)}%)"
+            for i, icon in enumerate(["🥇", "🥈"], start=1)
+            if sr.get(f"tp{i}") is not None
         )
 
-    targets = _build_targets(
-        signal,
-        entry,
-        signal_type
-    )
+        return f"""
+🚨 {title.upper()} SIGNAL (دو مرحله‌ای)
 
+🪙 {symbol}
+
+{direction}
+
+⏳ افق معامله: {term_label}
+{pattern_line}
+━━━━━━━━━━━━━━
+
+⏳ وضعیت: نزدیک {level_type} در {_fmt_price(level_price)} - هنوز به‌طور قطعی شکسته نشده
+
+💰 ورود پله ۱ (اکنون)
+{_fmt_price(entry1)}
+
+💰 ورود پله ۲ (در صورت افت قیمت)
+{_fmt_price(entry2)}
+
+━━━━━━━━━━━━━━
+
+📈 سناریو ۱ - در صورت شکست و تثبیت {level_type} ({_fmt_price(level_price)})
+
+ورود مجدد/تایید: {_fmt_price(sb['entry'])}
+🎯 اهداف:
+{breakout_targets}
+🛑 حد ضرر: {_fmt_price(sb['stop_loss'])}
+
+📉 سناریو ۲ - در صورت عدم شکست و ریزش
+
+🎯 اهداف:
+{rejection_targets}
+🛑 حد ضرر: {_fmt_price(sr['stop_loss'])}
+{leverage_line}
+
+━━━━━━━━━━━━━━
+
+⭐ امتیاز اطمینان
+{score}/100
+
+🧠 دلایل تأیید
+
+{reason_text}
+{risk_block}
+
+⚠️ توصیه: کل سرمایه را در یک نقطه وارد نکنید. پله دوم فقط برای احتمال ریزش رزرو شود.
+سیگنال بر اساس تأیید چندگانه صادر شده است. مدیریت سرمایه الزامی است.
+"""
+
+    # ---- حالت عادی (شامل شکست قطعی مقاومت/حمایت) ----
+    targets = _build_targets(signal, entry, signal_type)
     target_lines = []
+    icons = ["🥇", "🥈", "🥉", "🏆"]
 
-    icons = [
-        "🥇",
-        "🥈",
-        "🥉",
-        "🏆",
-    ]
-
-    for index, icon in enumerate(
-        icons,
-        start=1
-    ):
-
+    for index, icon in enumerate(icons, start=1):
         key = f"tp{index}"
-
         if key not in targets:
-
             continue
-
         target = targets[key]
-
-        profit = _pct(
-            entry,
-            target,
-            signal_type
-        )
-
+        profit = _pct(entry, target, signal_type)
         target_lines.append(
-            f"{icon} {key.upper()}: "
-            f"{_fmt_price(target)} "
-            f"(+{profit}%)"
+            f"{icon} {key.upper()}: {_fmt_price(target)} (+{profit}%)"
         )
 
-    stop = levels.get(
-        "stop_loss"
-    )
-
+    stop = levels.get("stop_loss")
     if not stop:
-
         try:
-
-            entry_float = float(
-                entry
-            )
-
+            entry_float = float(entry)
             stop = (
-                entry_float * 0.94
-                if signal_type == "LONG"
-                else
-                entry_float * 1.06
+                entry_float * 0.94 if signal_type == "LONG"
+                else entry_float * 1.06
             )
-
         except Exception:
-
             stop = "—"
 
     return f"""
@@ -821,7 +778,7 @@ def _format_scanner_signal(
 {direction}
 
 ⏳ افق معامله: {term_label}
-
+{pattern_line}
 ━━━━━━━━━━━━━━
 
 💰 نقطه ورود
@@ -1192,103 +1149,8 @@ def format_coiling_alert(
 که تأییدیه‌های لازم را گرفته‌اند
 و هنوز حرکت اصلی را کامل انجام نداده‌اند.
 """
-    METAL_LABELS = {
-    "GOLD": "🥇 طلا (Gold)",
-    "SILVER": "🥈 نقره (Silver)",
-    "COPPER": "🟤 مس (Copper)",
-}
 
 
-def format_metal_report(
-    signal: dict
-) -> str:
-
-    metal = signal.get(
-        "symbol",
-        ""
-    )
-
-    label = METAL_LABELS.get(
-        metal,
-        metal
-    )
-
-    direction = signal.get(
-        "direction",
-        "LONG"
-    )
-
-    direction_text = (
-        "🟢 چشم‌انداز صعودی"
-        if direction == "LONG"
-        else
-        "🔴 چشم‌انداز نزولی"
-    )
-
-    score = signal.get(
-        "score",
-        0
-    )
-
-    decision = signal.get(
-        "decision",
-        "REJECT"
-    )
-
-    decision_text = (
-        "✅ تأیید چندگانه (SIGNAL)"
-        if decision == "SIGNAL"
-        else
-        "⚪ در حد نظارت (بدون تأیید کامل)"
-    )
-
-    reasons = (
-        signal.get(
-            "reasons"
-        )
-        or []
-    )
-
-    reasons_text = "\n".join(
-        f"✅ {r}"
-        for r in reasons[:6]
-    )
-
-    if not reasons_text:
-
-        reasons_text = (
-            "تحلیل بر اساس اندیکاتورها و ساختار قیمت"
-        )
-
-    trade_plan = _format_trade_plan(
-        signal
-    )
-
-    return f"""
-📊 تحلیل روزانه {label}
-
-{direction_text}
-
-━━━━━━━━━━━━━━
-
-💰 قیمت فعلی
-{_fmt_price(signal.get('current_price'))}
-
-⭐ امتیاز اطمینان
-{score}/100
-
-📌 وضعیت
-{decision_text}
-
-🧠 دلایل تحلیل
-{reasons_text}
-
-🎯 سناریوی محتمل
-{trade_plan}
-
-⚠️ این گزارش روزانه است، نه سیگنال قطعی معامله.
-مدیریت سرمایه با خودتان است.
-"""
 METAL_LABELS = {
     "GOLD": "🥇 طلا (Gold)",
     "SILVER": "🥈 نقره (Silver)",
