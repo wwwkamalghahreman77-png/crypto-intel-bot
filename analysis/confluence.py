@@ -258,6 +258,11 @@ def _default_volume_bonus(
     }
 
 
+MAX_STOP_DISTANCE_PCT = 0.15  # حداکثر فاصله مجاز حد ضرر از قیمت فعلی (۱۵٪)
+NEAR_LEVEL_PCT = 5.0          # اگر فاصله تا مقاومت/حمایت کمتر از این درصد باشد، "نزدیک سطح" است
+BREAKOUT_CONFIRM_PCT = 0.5    # حداقل فاصله بسته‌شدن کندل از سطح برای تایید شکست قطعی
+
+
 def calculate_trade_levels(
     current_price,
     swing_low,
@@ -265,109 +270,255 @@ def calculate_trade_levels(
     direction
 ):
 
+    max_distance = current_price * MAX_STOP_DISTANCE_PCT
+
     if direction == "LONG":
 
+        raw_stop = swing_low * 0.98
+
+        # اگر کف نوسان خیلی دور بود، حد ضرر به حداکثر فاصله مجاز محدود می‌شود
         stop_loss = round(
-            swing_low * 0.98,
+            max(raw_stop, current_price - max_distance),
             8
         )
 
-        risk = (
-            current_price
-            -
-            stop_loss
-        )
+        risk = current_price - stop_loss
 
         if risk <= 0:
-
             return None
 
         return {
-
-            "entry": round(
-                current_price,
-                8
-            ),
-
+            "entry": round(current_price, 8),
             "stop_loss": stop_loss,
-
-            "tp1": round(
-                current_price
-                +
-                risk * 1,
-                8
-            ),
-
-            "tp2": round(
-                current_price
-                +
-                risk * 2,
-                8
-            ),
-
-            "tp3": round(
-                current_price
-                +
-                risk * 3,
-                8
-            ),
-
-            "tp4": round(
-                current_price
-                +
-                risk * 4,
-                8
-            ),
+            "tp1": round(current_price + risk * 1, 8),
+            "tp2": round(current_price + risk * 2, 8),
+            "tp3": round(current_price + risk * 3, 8),
+            "tp4": round(current_price + risk * 4, 8),
         }
 
+    raw_stop = swing_high * 1.02
+
+    # اگر سقف نوسان خیلی دور بود (مثل TLM)، حد ضرر به حداکثر فاصله مجاز محدود می‌شود
     stop_loss = round(
-        swing_high * 1.02,
+        min(raw_stop, current_price + max_distance),
         8
     )
 
-    risk = (
-        stop_loss
-        -
-        current_price
-    )
+    risk = stop_loss - current_price
 
     if risk <= 0:
-
         return None
 
     result = {
-
-        "entry": round(
-            current_price,
-            8
-        ),
-
+        "entry": round(current_price, 8),
         "stop_loss": stop_loss,
     }
 
-    # قیمت هرگز نمی‌تواند منفی یا صفر شود؛
-    # اگر ریسک نسبت به قیمت فعلی خیلی بزرگ باشد
-    # (مثلاً در شکست ساختار بلندمدت با فاصله زیاد
-    # تا سقف نوسان)، از یک سطح به بعد دیگر TP
-    # تولید نمی‌شود به‌جای اینکه قیمت منفی چاپ شود.
+    # قیمت هرگز نمی‌تواند منفی یا صفر شود؛ از یک سطح به بعد دیگر TP تولید نمی‌شود
     for i in range(1, 5):
+        target = current_price - risk * i
+        if target <= 0:
+            break
+        result[f"tp{i}"] = round(target, 8)
 
-        target = (
-            current_price
-            -
-            risk * i
+    return result
+
+
+def analyze_level_breakout(
+    current_price,
+    closes,
+    resistance,
+    support,
+    direction
+):
+    last_close = closes[-1] if closes else current_price
+    prev_close = closes[-2] if len(closes) >= 2 else last_close
+
+    if direction == "LONG":
+
+        level = resistance
+
+        if not level or level <= 0:
+            return {"status": "normal"}
+
+        confirmed = (
+            last_close > level * (1 + BREAKOUT_CONFIRM_PCT / 100)
+            and prev_close > level
         )
 
-        if target <= 0:
+        distance_pct = (level - current_price) / current_price * 100
 
-            break
+        if confirmed:
+            return {
+                "status": "confirmed_break",
+                "level_type": "مقاومت",
+                "level_price": round(level, 8),
+            }
 
-        result[f"tp{i}"] = round(
-            target,
+        if 0 <= distance_pct <= NEAR_LEVEL_PCT:
+
+            pullback_base = (
+                support if support and support < current_price
+                else current_price * 0.95
+            )
+
+            entry2 = round(
+                current_price - (current_price - pullback_base) * 0.5,
+                8
+            )
+
+            breakout_entry = round(level * 1.01, 8)
+            breakout_stop = round(level * 0.97, 8)
+            breakout_risk = breakout_entry - breakout_stop
+
+            rejection_stop = round(pullback_base * 0.97, 8)
+            rejection_risk = entry2 - rejection_stop
+
+            return {
+                "status": "near_level",
+                "level_type": "مقاومت",
+                "level_price": round(level, 8),
+                "entry1": round(current_price, 8),
+                "entry2": entry2,
+                "scenario_breakout": {
+                    "entry": breakout_entry,
+                    "stop_loss": breakout_stop,
+                    "tp1": round(breakout_entry + breakout_risk * 1, 8),
+                    "tp2": round(breakout_entry + breakout_risk * 2, 8),
+                    "tp3": round(breakout_entry + breakout_risk * 3, 8),
+                    "tp4": round(breakout_entry + breakout_risk * 4, 8),
+                },
+                "scenario_rejection": {
+                    "entry": entry2,
+                    "stop_loss": rejection_stop,
+                    "tp1": round(entry2 + rejection_risk * 1, 8) if rejection_risk > 0 else None,
+                    "tp2": round(entry2 + rejection_risk * 2, 8) if rejection_risk > 0 else None,
+                },
+            }
+
+        return {"status": "normal"}
+
+    # SHORT
+    level = support
+
+    if not level or level <= 0:
+        return {"status": "normal"}
+
+    confirmed = (
+        last_close < level * (1 - BREAKOUT_CONFIRM_PCT / 100)
+        and prev_close < level
+    )
+
+    distance_pct = (current_price - level) / current_price * 100
+
+    if confirmed:
+        return {
+            "status": "confirmed_break",
+            "level_type": "حمایت",
+            "level_price": round(level, 8),
+        }
+
+    if 0 <= distance_pct <= NEAR_LEVEL_PCT:
+
+        pullback_base = (
+            resistance if resistance and resistance > current_price
+            else current_price * 1.05
+        )
+
+        entry2 = round(
+            current_price + (pullback_base - current_price) * 0.5,
             8
         )
 
-    return result
+        breakout_entry = round(level * 0.99, 8)
+        breakout_stop = round(level * 1.03, 8)
+        breakout_risk = breakout_stop - breakout_entry
+
+        rejection_stop = round(pullback_base * 1.03, 8)
+        rejection_risk = rejection_stop - entry2
+
+        return {
+            "status": "near_level",
+            "level_type": "حمایت",
+            "level_price": round(level, 8),
+            "entry1": round(current_price, 8),
+            "entry2": entry2,
+            "scenario_breakout": {
+                "entry": breakout_entry,
+                "stop_loss": breakout_stop,
+                "tp1": round(breakout_entry - breakout_risk * 1, 8),
+                "tp2": round(breakout_entry - breakout_risk * 2, 8),
+                "tp3": round(breakout_entry - breakout_risk * 3, 8),
+                "tp4": round(breakout_entry - breakout_risk * 4, 8),
+            },
+            "scenario_rejection": {
+                "entry": entry2,
+                "stop_loss": rejection_stop,
+                "tp1": round(entry2 - rejection_risk * 1, 8) if rejection_risk > 0 else None,
+                "tp2": round(entry2 - rejection_risk * 2, 8) if rejection_risk > 0 else None,
+            },
+        }
+
+    return {"status": "normal"}
+
+
+def detect_pattern_label(
+    smc_result,
+    catalyst_result,
+    trendline_result,
+    coiling_result,
+    level_analysis,
+    direction
+):
+
+    if level_analysis and level_analysis.get("status") == "confirmed_break":
+        return (
+            f"✅ شکست قطعی {level_analysis['level_type']} "
+            f"({level_analysis['level_price']})"
+        )
+
+    if level_analysis and level_analysis.get("status") == "near_level":
+        return (
+            f"⏳ نزدیک {level_analysis['level_type']} - هنوز شکسته نشده "
+            f"({level_analysis['level_price']})"
+        )
+
+    if trendline_result and trendline_result.get("break_confirmed"):
+        return "📐 شکست ساختار بلندمدت (Trendline Break)"
+
+    structure_signal = (smc_result or {}).get("structure_signal")
+
+    if structure_signal == "CHOCH_BULLISH":
+        return "🔄 تغییر ساختار صعودی (CHoCH)"
+    if structure_signal == "CHOCH_BEARISH":
+        return "🔄 تغییر ساختار نزولی (CHoCH)"
+    if structure_signal == "BOS_BULLISH":
+        return "📈 شکست ساختار صعودی (BOS)"
+    if structure_signal == "BOS_BEARISH":
+        return "📉 شکست ساختار نزولی (BOS)"
+
+    sweep = (smc_result or {}).get("liquidity_sweep") or {}
+    if sweep.get("swept") == "low" and direction == "LONG":
+        return "💧 شکار نقدینگی کف (Liquidity Sweep)"
+    if sweep.get("swept") == "high" and direction == "SHORT":
+        return "💧 شکار نقدینگی سقف (Liquidity Sweep)"
+
+    if catalyst_result and catalyst_result.get("match"):
+        return "🚀 جهش کاتالیزوری (Catalyst Breakout)"
+
+    if coiling_result and coiling_result.get("match"):
+        return "🌀 فشردگی پیش از شکست (Pre-Breakout Coiling)"
+
+    obs = (smc_result or {}).get("order_blocks") or {}
+    if direction == "LONG" and obs.get("bullish_ob"):
+        return "🧱 نزدیک Order Block صعودی"
+    if direction == "SHORT" and obs.get("bearish_ob"):
+        return "🧱 نزدیک Order Block نزولی"
+
+    if (smc_result or {}).get("fvgs"):
+        return "⬜ داخل Fair Value Gap"
+
+    return "📊 تأیید چندگانه اندیکاتورها (بدون الگوی کلاسیک خاص)"
 
 
 def _safe_float(
@@ -1243,6 +1394,23 @@ def run_confluence_analysis(
 
     )
 
+    level_analysis = analyze_level_breakout(
+        current_price,
+        closes,
+        swing_high_20d,
+        swing_low_20d,
+        direction
+    )
+
+    pattern_label = detect_pattern_label(
+        smc_result,
+        catalyst_result,
+        trendline_result,
+        coiling_result,
+        level_analysis,
+        direction
+    )
+
     return {
 
         "symbol": symbol,
@@ -1258,6 +1426,10 @@ def run_confluence_analysis(
         "risks": risks[:5],
 
         "trade_levels": trade_levels,
+
+        "pattern": pattern_label,
+
+        "level_analysis": level_analysis,
 
         "current_price": round(
 
